@@ -1,10 +1,14 @@
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from typing import List
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date
+import io
 
 from core.supabase import supabase
-from schemas.patient import PatientCreate, PatientUpdate, PatientResponse, PatientHistoryRecord, PatientHistoryRecordCreate
+from schemas.patient import PatientCreate, PatientUpdate, PatientResponse, PatientHistoryRecord, PatientHistoryRecordCreate, BioAgePredictionRequest
+from services.bio_age_service import predict_bio_age_and_explain
+from services.pdf_service import generate_bio_age_pdf
 
 router = APIRouter(prefix="/api/patients", tags=["patients"])
 
@@ -103,3 +107,49 @@ async def add_patient_history(patient_id: UUID, history: PatientHistoryRecordCre
         raise HTTPException(status_code=400, detail="Failed to add patient history")
         
     return response.data[0]
+
+
+@router.post("/{patient_id}/predict-bio-age", response_class=StreamingResponse)
+async def predict_bio_age(
+    patient_id: UUID,
+    payload: BioAgePredictionRequest,
+    doctor_id: str = Depends(get_current_doctor_id)
+):
+    # Verify ownership
+    verify = supabase.table("patients").select("*").eq("id", str(patient_id)).eq("doctor_id", doctor_id).execute()
+    if not verify.data:
+        raise HTTPException(status_code=404, detail="Patient not found or unauthorized")
+        
+    patient_data = verify.data[0]
+    
+    # Calculate chronological age
+    dob_str = patient_data.get("date_of_birth")
+    if not dob_str:
+        raise HTTPException(status_code=400, detail="Patient date of birth is missing")
+        
+    dob = date.fromisoformat(dob_str[:10]) # Handle ISO format variations
+    today = date.today()
+    chronological_age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    
+    # Run prediction and SHAP
+    try:
+        features_dict = payload.model_dump()
+        analysis_results = predict_bio_age_and_explain(features_dict, float(chronological_age))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+        
+    # Generate PDF
+    try:
+        pdf_bytes = generate_bio_age_pdf(str(patient_id), analysis_results)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation error: {str(e)}")
+        
+    # Return as streaming response
+    pdf_stream = io.BytesIO(pdf_bytes)
+    return StreamingResponse(
+        pdf_stream, 
+        media_type="application/pdf", 
+        headers={
+            "Content-Disposition": f"attachment; filename=bio_age_report_{patient_id}.pdf"
+        }
+    )
