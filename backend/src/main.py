@@ -20,3 +20,7 @@ app.include_router(assessment.router)
 @app.get("/health")
 def health():
     return JSONResponse({"status": "ok"})
+
+@app.get("/")
+def greet():
+    return JSONResponse({"status":"Welcome to MAGE"})

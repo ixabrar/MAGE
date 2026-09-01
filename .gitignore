@@ -42,3 +42,9 @@ yarn-error.log*
 next-env.d.ts
 node_modules/
 frontend/node_modules/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
