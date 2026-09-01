@@ -64,6 +64,11 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 15px;
+            page-break-inside: auto;
+        }
+        tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
         }
         th, td {
             text-align: left;
@@ -138,7 +143,7 @@
                         <td>{{ "%.2f"|format(factor.value) }}</td>
                         <td>
                             +{{ "%.2f"|format(factor.impact) }} yrs
-                            <div style="margin-top: 5px;">
+                            <div style="margin-top: 5px; width: 100%;">
                                 <div class="impact-bar" style="width: {{ (factor.impact / max_impact) * 100 }}%;"></div>
                             </div>
                         </td>
