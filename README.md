@@ -1,37 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MAGE — Multimodal Age Estimation
+
+MAGE is a multimodal biological-age estimation platform that integrates face, dorsal-hand, and blood-report inputs through an Adaptive Reliability Module (ARM) and Prediction Fusion Module (PFM) to produce calibrated age predictions.
+
+## Repository Structure
+
+| Directory | Purpose |
+|---|---|
+| `frontend/` | Next.js frontend — landing page, assessment flow, dashboard, fusion explorer |
+| `backend/` | FastAPI backend — assessment orchestration, model adapters, ARM/PFM integration |
+| `fusion-layer/` | Copied ARM/PFM fusion implementation with mock models for development |
+| `database/` | Database boundary — placeholder; persistence not implemented yet |
+
+> **Note:** The original fusion source repository is at `D:/ARM+PFM/fusion/` and must remain untouched. The `fusion-layer/` directory in this repository is the integrated copy used by the backend.
+
+## Architecture
+
+```
+Frontend (Next.js)
+  → Backend API (FastAPI)
+    → Model Adapters
+      → Mock Models
+        → ARM / PFM
+          → FusionResult
+```
+
+## Tech Stack
+
+- **Frontend:** Next.js, TypeScript, Tailwind CSS, Framer Motion
+- **Backend:** FastAPI, Uvicorn, Pydantic
+- **Fusion:** ARM (Adaptive Reliability Module), PFM (Prediction Fusion Module)
+- **Fonts:** Rajdhani (display), Inter (body)
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- Python 3.11+
+- pip / uv
+
+### Frontend
 
 ```bash
+cd frontend
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Backend
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+cd backend
+pip install -r requirements.txt
+python -m uvicorn src.main:app --host 127.0.0.1 --port 8000
+```
 
-## Learn More
+Backend health check: http://localhost:8000/health
 
-To learn more about Next.js, take a look at the following resources:
+## Assessment Flow
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Select modalities: face, dorsal hand, blood report, or any combination
+2. Upload inputs through the assessment UI
+3. Frontend submits to `POST /api/assessment`
+4. Backend runs adapters → ARM → PFM
+5. Result displays fused predicted age, confidence, age bins, and model contributions
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Modality Support
 
-## Deploy on Vercel
+All seven combinations are supported:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Face
+- Dorsal Hand
+- Blood Report
+- Face + Dorsal Hand
+- Face + Blood
+- Dorsal Hand + Blood
+- Face + Dorsal Hand + Blood
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# MAGE
+## Development Notes
+
+- `NEXT_PUBLIC_DEV_AUTH_BYPASS` is active during development; auth/RBAC is not enforced
+- Mock models are used through backend adapters; real models can be plugged in later
+- Database persistence is not yet implemented; assessment results are stored in memory during development
+
+## Documentation
+
+- `DESIGN-superhuman.md` — primary frontend design specification
+- `SECURITY_HARDENING.md` — security considerations
+- `FRONTEND_LEARNING.md` — frontend development notes
+- `TERMS.md` — terms of use
+
+## Contributing
+
+Contributing members: Vikas, Abrar, Pruvesh (TEAM MOBIUS)
+
+## License
+
+Proprietary — all rights reserved.
