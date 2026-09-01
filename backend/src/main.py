@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from routes import assessment
+from routes import auth
+
 
 app = FastAPI(title="MAGE Backend", version="0.1.0")
 
@@ -15,12 +17,16 @@ app.add_middleware(
 )
 
 app.include_router(assessment.router)
+app.include_router(auth.router)
+
+
 
 
 @app.get("/health")
 def health():
     return JSONResponse({"status": "ok"})
 
+
 @app.get("/")
 def greet():
-    return JSONResponse({"status":"Welcome to MAGE"})
+    return JSONResponse({"status": "Welcome to MAGE"})
