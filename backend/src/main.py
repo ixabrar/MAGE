@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 
 from routes import assessment
 from routes import auth
-
+from routes import admin_doctor
 
 app = FastAPI(title="MAGE Backend", version="0.1.0")
 
@@ -18,6 +18,7 @@ app.add_middleware(
 
 app.include_router(assessment.router)
 app.include_router(auth.router)
+app.include_router(admin_doctor.router)
 
 
 
