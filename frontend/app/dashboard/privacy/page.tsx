@@ -1,0 +1,26 @@
+// TEMP DEV BYPASS — AUTH DISABLED
+// TODO: RESTORE AUTH BEFORE PRODUCTION
+const DEV_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { PrivacyPageClient } from "@/components/security/PrivacyPageClient";
+
+export default async function PrivacyIndex() {
+  let session;
+if (DEV_BYPASS) {
+  session = { user: { id: "dev_user", email: "mage.dev@example.com", name: "MAGE Development User", role: "user" } };
+} else {
+  session = await auth();
+}
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  return (
+    
+      <PrivacyPageClient />
+    
+  );
+}
