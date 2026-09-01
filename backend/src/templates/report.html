@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Biological Age Report</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #333;
+            line-height: 1.6;
+            margin: 40px;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #2563eb;
+            margin: 0;
+            font-size: 28px;
+        }
+        .summary-box {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .summary-box h2 {
+            margin-top: 0;
+            font-size: 20px;
+            color: #1e40af;
+        }
+        .metrics {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .metric {
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2563eb;
+        }
+        .metric-label {
+            font-size: 14px;
+            color: #64748b;
+            text-transform: uppercase;
+        }
+        .gap-positive {
+            color: #dc2626; /* Red for bad gap */
+        }
+        .gap-negative {
+            color: #16a34a; /* Green for good gap */
+        }
+        .factors-section {
+            margin-top: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background-color: #f1f5f9;
+            color: #475569;
+            font-weight: 600;
+        }
+        .impact-bar {
+            background-color: #fee2e2;
+            height: 20px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 12px;
+            color: #94a3b8;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Biological Age Analysis Report</h1>
+        <p>Patient ID: {{ patient_id }} | Date: {{ date }}</p>
+    </div>
+
+    <div class="summary-box">
+        <h2>Age Summary</h2>
+        <div class="metrics">
+            <div class="metric">
+                <div class="metric-value">{{ "%.1f"|format(chronological_age) }}</div>
+                <div class="metric-label">Chronological Age</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value">{{ "%.1f"|format(predicted_bio_age) }}</div>
+                <div class="metric-label">Biological Age</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value {% if bio_age_gap > 0 %}gap-positive{% else %}gap-negative{% endif %}">
+                    {% if bio_age_gap > 0 %}+{% endif %}{{ "%.1f"|format(bio_age_gap) }}
+                </div>
+                <div class="metric-label">Age Gap (Years)</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="factors-section">
+        {% if bio_age_gap > 0 %}
+            <h2>Key Contributing Factors</h2>
+            <p>Your biological age is higher than your chronological age. The machine learning model (SHAP analysis) has identified the following primary factors contributing to this increase:</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Biomarker / Feature</th>
+                        <th>Patient Value</th>
+                        <th>Impact (Years Added)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for factor in top_contributing_factors %}
+                    <tr>
+                        <td><strong>{{ factor.feature }}</strong></td>
+                        <td>{{ "%.2f"|format(factor.value) }}</td>
+                        <td>
+                            +{{ "%.2f"|format(factor.impact) }} yrs
+                            <div style="margin-top: 5px;">
+                                <div class="impact-bar" style="width: {{ (factor.impact / max_impact) * 100 }}%;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <h2>Health Status Excellent</h2>
+            <p>Congratulations! Your biological age is lower than or equal to your chronological age, indicating excellent overall health and metabolic function based on the provided biomarkers.</p>
+        {% endif %}
+    </div>
+
+    <div class="footer">
+        <p>Generated by MAGE Healthcare AI. This report is for informational purposes only and should be reviewed by a qualified medical professional.</p>
+    </div>
+
+</body>
+</html>
