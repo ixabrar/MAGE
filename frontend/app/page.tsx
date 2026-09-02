@@ -401,118 +401,270 @@ export default function Home() {
             </div>
           </nav>
 
-          {/* Hero content */}
-          <div ref={heroRef} className="flex flex-1 flex-col justify-center px-6 pb-16 pt-28 sm:px-10 lg:px-16">
-            <div className="flex flex-col items-start gap-6 md:max-w-2xl">
-              <div>
-                <p
-                  data-animate
-                  className="text-white/70"
-                  style={{
-                    fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    lineHeight: 1.0,
-                    letterSpacing: "1.8px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Multimodal biological age
-                </p>
-
-                <h1
-                  data-animate
-                  className="mt-6"
-                  style={{
-                    fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
-                    fontSize: "clamp(38px, 5.2vw, 64px)",
-                    fontWeight: 540,
-                    lineHeight: 0.96,
-                    letterSpacing: "0px",
-                    color: "#ffffff",
-                    maxWidth: "18ch",
-                  }}
-                >
-                  One estimate.
-                  <span className="block" style={{ color: "#bcbac9" }}>Multiple biological signals.</span>
-                  <span className="block">One fusion layer.</span>
-                </h1>
-
-                <p
-                  data-animate
-                  className="mt-8"
-                  style={{
-                    fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
-                    fontSize: "18px",
-                    fontWeight: 540,
-                    lineHeight: 1.5,
-                    letterSpacing: "-0.135px",
-                    color: "#bcbac9",
-                    maxWidth: "52ch",
-                  }}
-                >
-                  MAGE combines available biological signals from facial, dorsal-hand, and blood-derived data through a
-                  modality-aware fusion architecture.
-                </p>
-
-                <div data-animate className="mt-10 flex flex-col items-start gap-3">
-                  <motion.a
-                    href="/assessment"
-                    className="inline-flex items-center justify-center rounded-full px-6 py-3 text-base font-semibold"
-                    style={{
-                      fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
-                      fontSize: "16px",
-                      fontWeight: 700,
-                      lineHeight: 1.0,
-                      letterSpacing: "0px",
-                      background: "#c9b4fa",
-                      color: "#1b1938",
-                    }}
-                    whileHover={{ backgroundColor: "#d4c2fb" }}
-                    transition={{ duration: 0.12 }}
-                  >
-                    Start an assessment
-                  </motion.a>
-                  <a
-                    href="/fusion"
-                    className="inline-flex items-center justify-center rounded-md border border-white/35 px-6 py-3 text-base font-semibold text-white transition-colors duration-150 hover:border-white hover:bg-white/10"
-                    style={{
-                      fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
-                      fontSize: "16px",
-                      fontWeight: 700,
-                      lineHeight: 1.0,
-                      letterSpacing: "0px",
-                    }}
-                  >
-                    Explore the fusion layer
-                  </a>
-                </div>
-              </div>
-
-              <div className="mt-8 flex flex-wrap gap-2">
-                {modalities.map((modality) => {
-                  const isActive = activeModalities.includes(modality.id);
-                  return (
-                    <button
-                      key={modality.id}
-                      onClick={() => toggle(modality.id)}
-                      className="rounded-full border px-4 py-1.5 transition-colors duration-150"
+          {/* Hero — user friendly, centered, clear hierarchy */}
+          <div ref={heroRef} className="flex flex-1 flex-col justify-center px-6 pb-12 pt-20 sm:px-10 lg:px-16 lg:pt-24">
+            <div className="mx-auto w-full max-w-6xl">
+              {/* PUBLIC USER HERO — no login, Face + Hand only, no dashboard */}
+              {!isLoggedIn && (
+                <div className="mx-auto max-w-5xl">
+                  <div className="text-center">
+                    <p
+                      data-animate
+                      className="inline-flex items-center rounded-full border px-3 py-1 text-white/70"
                       style={{
                         fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
-                        fontSize: "14px",
+                        fontSize: "12px",
                         fontWeight: 600,
-                        lineHeight: 1.0,
-                        letterSpacing: "0px",
-                        borderColor: isActive ? "#3f3a52" : "transparent",
-                        color: isActive ? "#ffffff" : "#bcbac9",
-                        background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+                        letterSpacing: "1.4px",
+                        textTransform: "uppercase",
+                        borderColor: "rgba(201,180,250,0.35)",
+                        background: "rgba(201,180,250,0.08)",
                       }}
                     >
-                      {modality.label}
-                    </button>
-                  );
-                })}
-              </div>
+                      <span className="mr-2 h-2 w-2 rounded-full" style={{ background: "#c9b4fa" }} aria-hidden="true" />
+                      No login required • Privacy-first • 2 modalities
+                    </p>
+                    <h1
+                      data-animate
+                      className="mx-auto mt-6 max-w-3xl"
+                      style={{
+                        fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
+                        fontSize: "clamp(36px, 6vw, 64px)",
+                        fontWeight: 600,
+                        lineHeight: 0.95,
+                        letterSpacing: "-0.02em",
+                        color: "#ffffff",
+                      }}
+                    >
+                      Estimate your
+                      <span className="block" style={{ color: "#c9b4fa" }}>age</span>
+                      <span className="block" style={{ color: "#bcbac9", fontWeight: 400, fontSize: "0.55em", marginTop: "0.2em" }}>from a Face or Hand photo</span>
+                    </h1>
+                    <p
+                      data-animate
+                      className="mx-auto mt-6 max-w-2xl"
+                      style={{
+                        fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
+                        fontSize: "18px",
+                        fontWeight: 400,
+                        lineHeight: 1.6,
+                        color: "#bcbac9",
+                      }}
+                    >
+                      Public age estimation — upload a photo, get an AI age estimate instantly. For <span style={{ color: "#fff" }}>biological age</span> with gap analysis & report, visit the doctor portal.
+                    </p>
+                    <div data-animate className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                      <motion.a
+                        href="/assessment"
+                        className="inline-flex items-center justify-center rounded-full px-7 py-3 text-base font-semibold"
+                        style={{
+                          fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
+                          fontSize: "16px",
+                          fontWeight: 700,
+                          background: "#c9b4fa",
+                          color: "#1b1938",
+                        }}
+                        whileHover={{ backgroundColor: "#d4c2fb", scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        Start assessment →
+                      </motion.a>
+                      <a
+                        href="#modalities"
+                        className="inline-flex items-center justify-center rounded-full border px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-white/10"
+                        style={{
+                          fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
+                          fontSize: "16px",
+                          fontWeight: 600,
+                          borderColor: "rgba(255,255,255,0.2)",
+                        }}
+                      >
+                        How it works
+                      </a>
+                    </div>
+                    <p data-animate className="mt-4 text-center" style={{ fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif", fontSize: "13px", color: "#5a5772" }}>
+                      Takes ~15 seconds • No account needed for public check
+                    </p>
+                  </div>
+
+                  {/* Modality cards — large, tappable, visual */}
+                  <div data-animate className="mx-auto mt-12 grid max-w-3xl gap-4 sm:grid-cols-2">
+                    {[
+                      { id: "face", label: "Face", desc: "Frontal photo, good light", icon: "◐", href: "/assessment?selected=face" },
+                      { id: "dorsal_hand", label: "Dorsal Hand", desc: "Back of hand, palm down", icon: "✋", href: "/assessment?selected=dorsal_hand" },
+                    ].map((m) => {
+                      const isActive = activeModalities.includes(m.id as PublicModalityId);
+                      return (
+                        <a
+                          key={m.id}
+                          href={m.href}
+                          onClick={(e) => { e.preventDefault(); toggle(m.id as PublicModalityId); }}
+                          className="group relative flex flex-col rounded-2xl border p-6 text-left transition-all hover:scale-[1.01]"
+                          style={{
+                            background: isActive ? "rgba(201,180,250,0.12)" : "#0e0c1f",
+                            borderColor: isActive ? "#c9b4fa" : "#3f3a52",
+                            boxShadow: isActive ? "0 0 0 1px rgba(201,180,250,0.3)" : "none",
+                          }}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg" style={{ background: isActive ? "#c9b4fa" : "rgba(255,255,255,0.06)", color: isActive ? "#1b1938" : "#bcbac9" }}>
+                              {m.icon}
+                            </div>
+                            <span className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: isActive ? "#c9b4fa" : "#3f3a52", color: isActive ? "#c9b4fa" : "#5a5772", background: isActive ? "rgba(201,180,250,0.15)" : "transparent" }}>
+                              {isActive ? "Selected" : "Select"}
+                            </span>
+                          </div>
+                          <h3 className="mt-4 text-lg font-semibold" style={{ fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif", color: "#fff" }}>{m.label}</h3>
+                          <p className="mt-1 text-sm" style={{ color: "#bcbac9" }}>{m.desc}</p>
+                          <p className="mt-3 text-xs" style={{ color: "#5a5772" }}>Camera / Upload • JPG, PNG, WebP • Max 10MB</p>
+                        </a>
+                      );
+                    })}
+                  </div>
+                  <p data-animate className="mt-4 text-center text-sm" style={{ color: "#5a5772" }}>
+                    Tip: <span style={{ color: "#bcbac9" }}>Select both</span> for multimodal fusion — more robust than single modality alone.
+                  </p>
+                </div>
+              )}
+              {isLoggedIn && isDoctor && (
+                <div className="mx-auto max-w-3xl text-center">
+                  <p
+                    data-animate
+                    className="inline-flex items-center rounded-full border px-3 py-1"
+                    style={{
+                      fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      letterSpacing: "1.4px",
+                      textTransform: "uppercase",
+                      borderColor: "rgba(201,180,250,0.35)",
+                      color: "#c9b4fa",
+                      background: "rgba(201,180,250,0.08)",
+                    }}
+                  >
+                    Doctor portal • Your patients only
+                  </p>
+                  <h1
+                    data-animate
+                    className="mx-auto mt-6 max-w-2xl"
+                    style={{
+                      fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
+                      fontSize: "clamp(36px, 6vw, 56px)",
+                      fontWeight: 600,
+                      lineHeight: 0.95,
+                      color: "#ffffff",
+                    }}
+                  >
+                    Manage patients.
+                    <span className="block" style={{ color: "#bcbac9" }}>Review bio-age & reports.</span>
+                    <span className="block">Doctor-only access.</span>
+                  </h1>
+                  <p data-animate className="mx-auto mt-6 max-w-xl" style={{ fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif", fontSize: "17px", lineHeight: 1.6, color: "#bcbac9" }}>
+                    Welcome, {(session?.user as any)?.name || session?.user?.email}. Add patients, upload reports, and track bio-age trends — all isolated to your account.
+                  </p>
+                  <div data-animate className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                    <motion.a
+                      href="/dashboard/patients"
+                      className="inline-flex items-center justify-center rounded-full px-7 py-3 font-semibold"
+                      style={{ fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif", fontSize: "16px", fontWeight: 700, background: "#c9b4fa", color: "#1b1938" }}
+                      whileHover={{ backgroundColor: "#d4c2fb", scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Go to Patients →
+                    </motion.a>
+                    <a href="/dashboard/assessments" className="inline-flex items-center justify-center rounded-full border px-6 py-3 font-semibold text-white hover:bg-white/10" style={{ borderColor: "rgba(255,255,255,0.2)", fontSize: "16px" }}>
+                      New assessment
+                    </a>
+                  </div>
+                </div>
+              )}
+              {isLoggedIn && isAdmin && (
+                <div className="mx-auto max-w-3xl text-center">
+                  <p
+                    data-animate
+                    className="inline-flex items-center rounded-full border px-3 py-1"
+                    style={{
+                      fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      letterSpacing: "1.4px",
+                      textTransform: "uppercase",
+                      borderColor: "rgba(201,180,250,0.35)",
+                      color: "#c9b4fa",
+                      background: "rgba(201,180,250,0.08)",
+                    }}
+                  >
+                    Admin console • Role-protected
+                  </p>
+                  <h1
+                    data-animate
+                    className="mx-auto mt-6 max-w-2xl"
+                    style={{
+                      fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
+                      fontSize: "clamp(36px, 6vw, 56px)",
+                      fontWeight: 600,
+                      lineHeight: 0.95,
+                      color: "#ffffff",
+                    }}
+                  >
+                    Manage doctors
+                    <span className="block" style={{ color: "#bcbac9", fontWeight: 400, fontSize: "0.6em" }}>and audit system activity</span>
+                  </h1>
+                  <p data-animate className="mx-auto mt-6 max-w-xl" style={{ fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif", fontSize: "17px", lineHeight: 1.6, color: "#bcbac9" }}>
+                    No patient biometrics here — only users, roles, and logs. Use the doctor portal for patient care.
+                  </p>
+                  <div data-animate className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                    <motion.a
+                      href="/dashboard/users"
+                      className="inline-flex items-center justify-center rounded-full px-7 py-3 font-semibold"
+                      style={{ fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif", fontSize: "16px", fontWeight: 700, background: "#c9b4fa", color: "#1b1938" }}
+                      whileHover={{ backgroundColor: "#d4c2fb", scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Manage Doctors →
+                    </motion.a>
+                    <a href="/dashboard/audit" className="inline-flex items-center justify-center rounded-full border px-6 py-3 font-semibold text-white hover:bg-white/10" style={{ borderColor: "rgba(255,255,255,0.2)", fontSize: "16px" }}>
+                      View audit logs
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* old pill toggles removed — now handled by cards above */}
+              {false && !isLoggedIn && (
+                <div className="mt-8 flex flex-wrap gap-2">
+                  {publicModalities.map((modality) => {
+                    const isActive = activeModalities.includes(modality.id);
+                    return (
+                      <button
+                        key={modality.id}
+                        onClick={() => toggle(modality.id)}
+                        className="rounded-full border px-4 py-1.5 transition-colors duration-150"
+                        style={{
+                          fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
+                          fontSize: "14px",
+                          fontWeight: 600,
+                          lineHeight: 1.0,
+                          letterSpacing: "0px",
+                          borderColor: isActive ? "#3f3a52" : "transparent",
+                          color: isActive ? "#ffffff" : "#bcbac9",
+                          background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+                        }}
+                      >
+                        {modality.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {(isDoctor || isAdmin) && (
+                <div className="mt-8 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: "#3f3a52", background: "rgba(201,180,250,0.08)", color: "#bcbac9" }}>
+                  {isDoctor
+                    ? "You are signed in as Doctor — patients are isolated per doctor. Reports are validated and never logged raw."
+                    : "You are signed in as Admin — patient data stays protected. Only doctors access their assigned patients."}
+                </div>
+              )}
             </div>
 
             <div
@@ -529,13 +681,13 @@ export default function Home() {
               <div className="flex items-center gap-8">
                 <div>
                   <span className="block text-white" style={{ fontSize: "20px", fontWeight: 540 }}>
-                    3
+                    2
                   </span>
                   <span className="mt-1 block">Modalities</span>
                 </div>
                 <div>
                   <span className="block text-white" style={{ fontSize: "20px", fontWeight: 540 }}>
-                    {Math.pow(2, 3) - 1}
+                    {Math.pow(2, 2) - 1}
                   </span>
                   <span className="mt-1 block">Combinations</span>
                 </div>
@@ -553,88 +705,30 @@ export default function Home() {
 
       {/* Body sections */}
       <main suppressHydrationWarning className="relative z-10">
-        {/* Modalities section */}
-        <section className="relative py-24 bg-black" suppressHydrationWarning>
-          <div className="absolute inset-x-0 top-0 h-32 bg-fade-top pointer-events-none" aria-hidden="true" />
+        {/* Section divider */}
+        <div className="mx-auto max-w-7xl px-6 sm:px-10 lg:px-16" aria-hidden="true">
+          <div className="h-px w-full" style={{ background: "linear-gradient(to right, transparent, #1e1c2a, transparent)" }} />
+        </div>
+        {/* Modalities — clean, minimal */}
+        <section id="modalities" className="relative py-16 sm:py-20 bg-black" suppressHydrationWarning>
+          <div className="absolute inset-x-0 top-0 h-24 bg-fade-top pointer-events-none" aria-hidden="true" />
           <div className="mx-auto max-w-7xl px-6 sm:px-10 lg:px-16 relative z-10">
-            <h2
-              className="text-4xl font-medium tracking-tight"
-              style={{
-                fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                fontSize: "48px",
-                fontWeight: 460,
-                lineHeight: 0.96,
-                letterSpacing: "-1.32px",
-                color: "#ffffff",
-              }}
-            >
-              Modalities
-            </h2>
-            <p
-              className="mt-6 max-w-2xl text-lg"
-              style={{
-                fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                fontSize: "18px",
-                fontWeight: 540,
-                lineHeight: 1.5,
-                letterSpacing: "-0.135px",
-                color: "#bcbac9",
-              }}
-            >
-              Each modality contributes an independent biological signal. The fusion layer adapts to whichever
-              combination is available at assessment time.
-            </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl" style={{ fontFamily: "var(--font-display,'Rajdhani'),system-ui,sans-serif", color: "#fff" }}>
+                Two modalities.
+              </h2>
+              <p className="max-w-sm text-sm leading-relaxed" style={{ color: "#5a5772" }}>Pick one or both. Fusion handles the rest.</p>
+            </div>
 
-            <div className="mt-16 grid gap-6 md:grid-cols-3">
-              {modalities.map((modality) => (
-                <div
-                  key={modality.id}
-                  className="rounded-xl border p-8"
-                  style={{
-                    background: "#000000",
-                    borderColor: "#3f3a52",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                  }}
-                >
-                  <h3
-                    className="text-xl font-medium"
-                    style={{
-                      fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                      fontSize: "22px",
-                      fontWeight: 460,
-                      lineHeight: 1.1,
-                      letterSpacing: "-0.315px",
-                      color: "#ffffff",
-                    }}
-                  >
-                    {modality.label}
-                  </h3>
-                  <p
-                    className="mt-3 text-base"
-                    style={{
-                      fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                      fontSize: "16px",
-                      fontWeight: 460,
-                      lineHeight: 1.5,
-                      letterSpacing: "0px",
-                      color: "#bcbac9",
-                    }}
-                  >
-                    {modality.description}
-                  </p>
-                  <p
-                    className="mt-4 text-sm"
-                    style={{
-                      fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                      fontSize: "14px",
-                      fontWeight: 460,
-                      lineHeight: 1.4,
-                      letterSpacing: "0px",
-                      color: "#5a5772",
-                    }}
-                  >
-                    {modality.inputType}
-                  </p>
+            <div className="mt-10 grid gap-4 sm:grid-cols-2">
+              {publicModalities.map((m) => (
+                <div key={m.id} className="group rounded-2xl border p-6 transition-colors hover:border-[#c9b4fa]/30" style={{ background: "#0e0c1f", borderColor: "#1e1c2a" }}>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm" style={{ background: "rgba(201,180,250,0.15)", color: "#c9b4fa" }}>
+                    {m.id === "face" ? "◐" : "✋"}
+                  </div>
+                  <h3 className="mt-4 text-base font-semibold" style={{ color: "#fff" }}>{m.label}</h3>
+                  <p className="mt-1 text-sm leading-relaxed" style={{ color: "#bcbac9" }}>{m.id === "face" ? "Frontal face, good light, no filter." : "Back of hand, palm down, fill the frame."}</p>
+                  <p className="mt-3 inline-flex rounded-full border px-2.5 py-1 text-xs" style={{ borderColor: "#1e1c2a", color: "#5a5772", background: "rgba(255,255,255,0.03)" }}>{m.inputType}</p>
                 </div>
               ))}
             </div>
@@ -679,64 +773,17 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="mt-16 grid gap-6 md:grid-cols-2">
+            <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {[
-                {
-                  title: "Secure upload",
-                  description:
-                    "Face images and blood reports are transferred over encrypted channels and are never exposed through public asset URLs.",
-                },
-                {
-                  title: "Private storage",
-                  description:
-                    "Sensitive assets are stored separately from identity data, with retention and deletion controls designed from the start.",
-                },
-                {
-                  title: "Consent and control",
-                  description:
-                    "Processing only begins after clear consent. Users can review, delete, or request deletion of their stored data where supported.",
-                },
-                {
-                  title: "Auditability",
-                  description:
-                    "Important actions are recorded in protected audit logs so sensitive access remains reviewable without exposing raw biometric content.",
-                },
+                { title: "Encrypted upload", desc: "TLS 1.3, 10MB limit, image/PDF validation. No public asset URLs.", icon: "🔒" },
+                { title: "Isolated storage", desc: "Biometric blobs separate from profiles, with retention & deletion.", icon: "🛡️" },
+                { title: "Consent first", desc: "Processing starts only after explicit consent. Review or delete anytime.", icon: "✓" },
+                { title: "Audit logs", desc: "Admin sees who did what, when — never raw images or report content.", icon: "≡" },
               ].map((item) => (
-                <div
-                  key={item.title}
-                  className="rounded-xl border p-8"
-                  style={{
-                    background: "#000000",
-                    borderColor: "#3f3a52",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                  }}
-                >
-                  <h3
-                    className="text-xl font-medium"
-                    style={{
-                      fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                      fontSize: "22px",
-                      fontWeight: 460,
-                      lineHeight: 1.1,
-                      letterSpacing: "-0.315px",
-                      color: "#ffffff",
-                    }}
-                  >
-                    {item.title}
-                  </h3>
-                  <p
-                    className="mt-3 text-base"
-                    style={{
-                      fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                      fontSize: "16px",
-                      fontWeight: 460,
-                      lineHeight: 1.5,
-                      letterSpacing: "0px",
-                      color: "#bcbac9",
-                    }}
-                  >
-                    {item.description}
-                  </p>
+                <div key={item.title} className="group rounded-2xl border p-6 transition-colors hover:border-[#c9b4fa]/40" style={{ background: "#0e0c1f", borderColor: "#3f3a52" }}>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm" style={{ background: "rgba(201,180,250,0.15)", color: "#c9b4fa" }}>{item.icon}</div>
+                  <h3 className="mt-4 text-sm font-semibold" style={{ color: "#fff" }}>{item.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed" style={{ color: "#bcbac9" }}>{item.desc}</p>
                 </div>
               ))}
             </div>
@@ -782,44 +829,10 @@ export default function Home() {
                   <span style={{ fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif", fontWeight: 700, fontSize: "18px", letterSpacing: "0.5px", color: "#fff" }}>MAGE</span>
                   <span className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase" style={{ letterSpacing: "1.2px", color: "#c9b4fa", borderColor: "rgba(201,180,250,0.3)", background: "rgba(201,180,250,0.08)" }}>Team Mobius</span>
                 </div>
-                <p
-                  className="mt-4 max-w-sm"
-                  style={{
-                    fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                    fontSize: "14px",
-                    lineHeight: 1.6,
-                    color: "#bcbac9",
-                  }}
-                >
-                  A continuous loop of research, engineering, and design — building the next generation of
-                  multimodal biological-age estimation.
+                <p className="mt-3 max-w-sm text-sm leading-relaxed" style={{ color: "#bcbac9" }}>
+                  Multimodal biological-age research — face, dorsal hand & lab fusion via ARM + PFM. Built for study, not diagnosis.
                 </p>
-                <div className="mt-6 flex items-center gap-2">
-                  <span
-                    className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase"
-                    style={{
-                      borderColor: "#c9b4fa",
-                      color: "#c9b4fa",
-                      fontFamily: "var(--font-mono, 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace)",
-                      fontSize: "11px",
-                      letterSpacing: "1.8px",
-                    }}
-                  >
-                    ∞ Mobius
-                  </span>
-                  <span
-                    className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase"
-                    style={{
-                      borderColor: "rgba(255,255,255,0.18)",
-                      color: "rgba(255,255,255,0.7)",
-                      fontFamily: "var(--font-mono, 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace)",
-                      fontSize: "11px",
-                      letterSpacing: "1.8px",
-                    }}
-                  >
-                    Continuous Research
-                  </span>
-                </div>
+                <p className="mt-4 text-xs" style={{ color: "#5a5772" }}>Vikas • Abrar • Pruvesh — continuous research loop.</p>
               </div>
 
               <div className="lg:col-span-2">
