@@ -1,6 +1,8 @@
 import os
-from groq import Groq
-
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
 
 def generate_health_recommendations(factors: list) -> str:
     """
@@ -9,6 +11,10 @@ def generate_health_recommendations(factors: list) -> str:
 
     Returns recommendations formatted as HTML.
     """
+
+    if Groq is None:
+        print("[LLM ERROR]: groq not installed, using fallback.")
+        return "<p><em>AI recommendations temporarily unavailable.</em></p>"
 
     api_key = os.getenv("GROQ_API_KEY")
 
