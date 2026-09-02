@@ -5,3 +5,9 @@ python-multipart==0.0.9
 supabase==2.4.5
 python-dotenv
 PyMuPDF
+xgboost
+shap
+pandas
+numpy
+jinja2
+weasyprint
