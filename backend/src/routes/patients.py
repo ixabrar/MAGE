@@ -7,21 +7,26 @@ import io
 import os
 
 from core.supabase import supabase
-from schemas.patient import PatientCreate, PatientUpdate, PatientResponse, PatientHistoryRecord, PatientHistoryRecordCreate, BioAgePredictionRequest
+from schemas.patient import (
+    PatientCreate,
+    PatientUpdate,
+    PatientResponse,
+    PatientHistoryRecord,
+    PatientHistoryRecordCreate,
+    BioAgePredictionRequest
+)
 from services.bio_age_service import predict_bio_age_and_explain
 from services.pdf_service import generate_bio_age_pdf
 from services.llm_service import generate_health_recommendations
 from services.email_service import send_report_email
 
-router = APIRouter(prefix="/api/patients", tags=["patients"])
+from middleware.auth import get_current_doctor_id
 
 
-# Dummy dependency to simulate doctor auth for now
-# In a real scenario, this would decode the Supabase JWT and extract the user ID
-def get_current_doctor_id() -> str:
-    # Example hardcoded doctor UUID for testing purposes
-    return "00000000-0000-0000-0000-000000000001"
-
+router = APIRouter(
+    prefix="/api/patients",
+    tags=["patients"]
+)
 
 @router.post("/", response_model=PatientResponse)
 async def create_patient(patient: PatientCreate, doctor_id: str = Depends(get_current_doctor_id)):
