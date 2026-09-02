@@ -1,23 +1,19 @@
 import os
-import google.generativeai as genai
-
-# Configure the API key when the module loads
-api_key = os.getenv("GEMINI_API_KEY")
-if api_key:
-    genai.configure(api_key=api_key)
+from google import genai
 
 def generate_health_recommendations(factors: list) -> str:
     """
     Calls the Gemini API to generate personalized health recommendations based on SHAP contributing factors.
     Returns the recommendations formatted as HTML.
     """
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
+        print("[LLM ERROR]: GEMINI_API_KEY environment variable is not set.")
         return "<p><em>Warning: Gemini API key is missing. Cannot generate AI recommendations.</em></p>"
         
     if not factors:
         return ""
         
-    # Format the factors for the prompt
     factor_lines = []
     for f in factors:
         name = f.get("feature", "Unknown")
@@ -42,10 +38,16 @@ Keep the tone professional and encouraging.
 """
 
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
-        # Strip potential markdown formatting if the model still returns it
+        client = genai.Client(api_key=api_key)
+        
+        # Updated to active model target
+        response = client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=prompt,
+        )
+        
         html_content = response.text.strip()
+        
         if html_content.startswith("```html"):
             html_content = html_content[7:]
         if html_content.startswith("```"):
@@ -54,6 +56,7 @@ Keep the tone professional and encouraging.
             html_content = html_content[:-3]
             
         return html_content.strip()
+
     except Exception as e:
-        print(f"Error calling Gemini API: {e}")
+        print(f"[LLM ERROR] Exception during Gemini API call: {e}")
         return "<p><em>Error generating recommendations at this time.</em></p>"
