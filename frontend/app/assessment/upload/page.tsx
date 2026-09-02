@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState, useEffect } from "react";
+import { Suspense, useMemo, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 
@@ -19,9 +19,9 @@ const modalityMeta: Record<StepKey, { title: string; accept: string; helper: str
     helper: "Upload a clear frontal face image or use the camera placeholder.",
   },
   dorsal_hand: {
-    title: "Dorsal hand input",
+    title: "Dorsal hand input — ResNet18",
     accept: "image/*",
-    helper: "Upload a dorsal-hand image or use the camera placeholder.",
+    helper: "Upload a dorsal-hand image (ResNet18 resnet18_consistent_age_best.pth, 128M) — real inference on CPU, fallback to mock if unavailable.",
   },
   blood: {
     title: "Blood input",
@@ -33,6 +33,16 @@ const modalityMeta: Record<StepKey, { title: string; accept: string; helper: str
 function AssessmentUploadInner() {
   const router = useRouter();
   const params = useSearchParams();
+  const selectedParam = params.get("selected");
+  const selected: StepKey[] = useMemo(() => {
+    if (!selectedParam) return ["face", "dorsal_hand", "blood"];
+    return selectedParam
+      .split(",")
+      .filter((value): value is StepKey => steps.some((step) => step.key === value));
+  }, [selectedParam]);
+  const availableSteps = useMemo(() => steps.filter((step) => selected.includes(step.key)), [selected]);
+  // Keep initial deterministic to avoid hydration mismatch (server/client both start at "face")
+  // useEffect below will sync to correct tab from URL (?selected=...)
   const [activeStep, setActiveStep] = useState<StepKey>("face");
   const [files, setFiles] = useState<Record<StepKey, File | null>>({
     face: null,
@@ -43,6 +53,9 @@ function AssessmentUploadInner() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submittedAssessmentId, setSubmittedAssessmentId] = useState<string | null>(null);
+  const [dorsalResult, setDorsalResult] = useState<null | { predicted_age: number; confidence: number; age_bins: Record<string, number>; source: string }>(null);
+  const [dorsalLoading, setDorsalLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (step: StepKey, file: File | null) => {
     setFiles((current) => ({ ...current, [step]: file }));
@@ -54,16 +67,6 @@ function AssessmentUploadInner() {
     router.push("/assessment");
   };
 
-  const selectedParam = params.get("selected");
-  const selected: StepKey[] = useMemo(() => {
-    if (!selectedParam) return ["face", "dorsal_hand", "blood"];
-    return selectedParam
-      .split(",")
-      .filter((value): value is StepKey => steps.some((step) => step.key === value));
-  }, [selectedParam]);
-
-  const availableSteps = steps.filter((step) => selected.includes(step.key));
-
   useEffect(() => {
     if (availableSteps.length === 0) {
       setActiveStep("face");
@@ -73,44 +76,80 @@ function AssessmentUploadInner() {
     if (!currentStillValid) {
       setActiveStep(availableSteps[0].key);
     }
-  }, [selected, activeStep, availableSteps]);
+  }, [availableSteps, activeStep]);
+
+  // reset file input value when switching tabs so same file can be re-selected
+  useEffect(() => {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, [activeStep]);
 
   const handleSubmit = async () => {
     setSubmitting(true);
     setSubmitError(null);
+    setDorsalResult(null);
 
     try {
       const modalities = availableSteps.map((step) => step.key);
-      const inputs: Record<string, { type: string; file_url: string | null }> = {};
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-      for (const step of availableSteps) {
-        const file = files[step.key];
-        inputs[step.key] = {
-          type: step.key === "blood" ? "pdf_or_image" : "image",
-          file_url: file ? file.name : null,
-        };
+      // If dorsal_hand file exists, we can show preview by calling real model while also sending real bytes via fusion
+      const dorsalFile = files["dorsal_hand"];
+      let previewPromise: Promise<void> | null = null;
+      if (modalities.includes("dorsal_hand") && dorsalFile) {
+        setDorsalLoading(true);
+        previewPromise = (async () => {
+          try {
+            const { predictDorsalHand } = await import("@/lib/api");
+            const real = await predictDorsalHand(dorsalFile);
+            setDorsalResult(real);
+          } catch (e) {
+            console.warn("dorsal preview failed, will rely on fusion real inference", e);
+            // don't block submission; fusion will also try real
+          } finally {
+            setDorsalLoading(false);
+          }
+        })();
       }
 
-      const payload = {
-        modalities,
-        inputs,
-        context: {},
-      };
+      // Build multipart FormData with real file bytes so backend dorsal_adapter gets file_path
+      const formData = new FormData();
+      formData.append("modalities", JSON.stringify(modalities));
+      for (const step of availableSteps) {
+        const file = files[step.key];
+        if (file) {
+          // key must match modality name exactly (backend looks for form.get(modality))
+          formData.append(step.key, file, file.name);
+        }
+      }
 
-      const response = await fetch("http://127.0.0.1:8000/api/assessment", {
+      // Wait for preview to settle a bit but don't block forever (max 3s)
+      if (previewPromise) {
+        await Promise.race([previewPromise, new Promise((r) => setTimeout(r, 3000))]);
+      }
+
+      const response = await fetch(`${apiBase}/api/assessment`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        body: formData,
+        // no content-type header — browser sets multipart boundary
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ detail: response.statusText }));
         throw new Error(error.detail || "Assessment submission failed");
       }
 
       const data = await response.json();
       setSubmittedAssessmentId(data.assessment_id);
       setSubmitted(true);
+      // Show preview a bit if dorsal was used
+      if (dorsalFile && dorsalResult) {
+        setTimeout(() => router.push(`/assessment/processing?assessment_id=${data.assessment_id}`), 1500);
+      } else if (dorsalFile) {
+        // wait a moment for fusion to be ready
+        setTimeout(() => router.push(`/assessment/processing?assessment_id=${data.assessment_id}`), 500);
+      } else {
+        router.push(`/assessment/processing?assessment_id=${data.assessment_id}`);
+      }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Submission failed");
       setSubmitting(false);
@@ -165,12 +204,12 @@ function AssessmentUploadInner() {
             Provide each selected input. Only the modalities chosen in the previous step are available here.
           </p>
 
-          {availableSteps.length === 0 ? (
+            {availableSteps.length === 0 ? (
             <p className="mt-8 text-sm" style={{ color: "#ff8a8a" }}>
               No modalities selected. Go back and choose at least one signal before uploading.
             </p>
           ) : (
-            <div className="mt-10 flex gap-2">
+            <div className="mt-10 flex gap-2" suppressHydrationWarning>
               {availableSteps.map((step) => (
                 <button
                   key={step.key}
@@ -205,9 +244,10 @@ function AssessmentUploadInner() {
             {availableSteps.length === 0 ? (
               <p style={{ color: "#bcbac9" }}>No modality selected.</p>
             ) : (
-              <div key={activeStep} className="space-y-4">
+              <div key={activeStep} className="space-y-4" suppressHydrationWarning>
                 <div>
                   <h3
+                    suppressHydrationWarning
                     className="text-xl font-medium"
                     style={{
                       fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
@@ -226,18 +266,30 @@ function AssessmentUploadInner() {
                 </div>
 
                 <div className="flex flex-col gap-3">
-                  <label
-                    className="flex h-48 cursor-pointer items-center justify-center rounded-lg border"
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => fileInputRef.current?.click()}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); } }}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const file = e.dataTransfer.files?.[0] ?? null;
+                      if (file) handleChange(activeStep, file);
+                    }}
+                    className="flex h-48 cursor-pointer items-center justify-center rounded-lg border relative overflow-hidden"
                     style={{
                       borderColor: "#3f3a52",
                       background: "#0e0c1f",
                       color: files[activeStep] ? "#ffffff" : "#5a5772",
                     }}
                   >
-                    <span>
+                    <span className="pointer-events-none">
                       {files[activeStep] ? files[activeStep].name : "Click to select a file or drop it here"}
                     </span>
                     <input
+                      ref={fileInputRef}
                       type="file"
                       className="hidden"
                       accept={modalityMeta[activeStep].accept}
@@ -246,7 +298,7 @@ function AssessmentUploadInner() {
                         handleChange(activeStep, file);
                       }}
                     />
-                  </label>
+                  </div>
 
                   {files[activeStep] && (
                     <button
@@ -269,6 +321,38 @@ function AssessmentUploadInner() {
             </p>
           )}
 
+          {dorsalLoading && (
+            <div className="mt-4 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: "#c9b4fa", background: "rgba(201,180,250,0.08)", color: "#bcbac9" }}>
+              Running dorsal hand ResNet18 (resnet18_consistent_age_best.pth) on CPU…
+            </div>
+          )}
+
+          {dorsalResult && (
+            <div className="mt-4 rounded-xl border p-6" style={{ borderColor: "#c9b4fa", background: "#000" }}>
+              <p className="text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>
+                Dorsal hand — ResNet18 result (real model)
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg border p-4" style={{ borderColor: "#3f3a52", background: "#0e0c1f" }}>
+                  <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#bcbac9" }}>Predicted age</p>
+                  <p style={{ color: "#fff", fontSize: "24px", fontWeight: 700, marginTop: "4px" }}>{dorsalResult.predicted_age.toFixed(1)}</p>
+                  <p style={{ color: "#5a5772", fontSize: "12px" }}>years · {dorsalResult.source}</p>
+                </div>
+                <div className="rounded-lg border p-4" style={{ borderColor: "#3f3a52", background: "#0e0c1f" }}>
+                  <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#bcbac9" }}>Confidence</p>
+                  <p style={{ color: "#fff", fontSize: "24px", fontWeight: 700, marginTop: "4px" }}>{(dorsalResult.confidence * 100).toFixed(0)}%</p>
+                </div>
+                <div className="rounded-lg border p-4" style={{ borderColor: "#3f3a52", background: "#0e0c1f" }}>
+                  <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#bcbac9" }}>Age bins</p>
+                  <p style={{ color: "#bcbac9", fontSize: "12px", marginTop: "4px", lineHeight: 1.6 }}>
+                    {Object.entries(dorsalResult.age_bins).map(([k, v]) => `${k}: ${(Number(v) * 100).toFixed(0)}%`).join(" · ")}
+                  </p>
+                </div>
+              </div>
+              <p style={{ color: "#5a5772", fontSize: "11px", marginTop: "8px" }}>Backend: POST /api/predict/dorsal-hand → {dorsalResult.source}. Mock fusion still runs via POST /api/assessment for demo.</p>
+            </div>
+          )}
+
           <div className="mt-10 flex items-center justify-between">
             <button
               type="button"
@@ -288,7 +372,7 @@ function AssessmentUploadInner() {
             </button>
             <button
               type="button"
-              disabled={submitting || !availableSteps.some((step) => step.key === activeStep && Boolean(files[step.key]))}
+              disabled={submitting || dorsalLoading || !availableSteps.every((step) => Boolean(files[step.key]))}
               onClick={handleSubmit}
               className="rounded-full px-6 py-3 text-base font-semibold transition-colors duration-150 disabled:opacity-40"
               style={{

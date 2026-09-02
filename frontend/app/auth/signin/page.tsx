@@ -1,8 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+import { saveAuth } from "@/lib/authStore";
 
-export default function AuthSignInPage() {
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+function AuthSignInInner() {
+  const searchParams = useSearchParams();
+  const requestedRole = searchParams.get("role"); // doctor | admin | null
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -13,7 +20,7 @@ export default function AuthSignInPage() {
     setLoading(true);
 
     const form = e.currentTarget;
-    const email = (form.elements.namedItem("email") as HTMLInputElement).value;
+    const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim().toLowerCase();
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
 
     try {
@@ -24,7 +31,6 @@ export default function AuthSignInPage() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ name, email, password }),
         });
-
         const signupData = await signupRes.json();
         if (!signupRes.ok) {
           setError(signupData.error ?? "Signup failed.");
@@ -33,21 +39,81 @@ export default function AuthSignInPage() {
         }
       }
 
-      const res = await fetch("/api/auth/callback/credentials", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password }),
-        redirect: "follow",
-      });
+      // 1) Try backend login first to obtain role + tokens (for API calls)
+      let backendRole: string | null = null;
+      try {
+        const backendRes = await fetch(`${API_BASE}/api/auth/login`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        if (backendRes.ok) {
+          const data = await backendRes.json();
+          if (data?.access_token && data?.user) {
+            saveAuth(data.access_token, data.refresh_token || "", {
+              id: String(data.user.id),
+              email: String(data.user.email),
+              full_name: String(data.user.full_name || data.user.email),
+              role: String(data.user.role || "user"),
+            });
+            backendRole = String(data.user.role || "user");
+          }
+        } else if (mode === "login") {
+          // For login, surface backend error if backend reachable
+          const j = await backendRes.json().catch(() => ({}));
+          if (j?.detail) {
+            // don't block next-auth fallback, but capture
+            // will try next-auth next
+          }
+        }
+      } catch {
+        // backend unavailable — continue to next-auth fallback
+      }
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Sign in failed.");
+      // 2) Establish NextAuth session (authorize will re-hit backend if available)
+      const res = await signIn("credentials", { email, password, redirect: false });
+
+      if (res?.error) {
+        setError("Invalid email or password.");
         setLoading(false);
         return;
       }
 
-      window.location.href = "/dashboard";
+      // 3) Role-aware redirect — prefer backendRole, fallback to session role (local dev doctors/admins)
+      let role = backendRole;
+      if (!role) {
+        try {
+          const sessRes = await fetch("/api/auth/session");
+          if (sessRes.ok) {
+            const sess = await sessRes.json();
+            role = sess?.user?.role || (sess as any)?.role || null;
+          }
+        } catch {}
+      }
+      role = role || "user";
+      // Enforce requested role if ?role=doctor|admin was in URL
+      if (requestedRole === "doctor" && role !== "doctor" && role !== "clinician") {
+        setError(`This login is for doctors. Your account role is "${role}". Try doctor@mage.health / doctor123`);
+        // sign out the mismatched session so user can retry
+        try { await fetch("/api/auth/signout", { method: "POST" }); } catch {}
+        try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_user"); } catch {}
+        setLoading(false);
+        return;
+      }
+      if (requestedRole === "admin" && role !== "admin" && role !== "system_admin" && role !== "organization_admin") {
+        setError(`This login is for admins. Your account role is "${role}". Try admin@mage.health / admin123`);
+        try { await fetch("/api/auth/signout", { method: "POST" }); } catch {}
+        try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_user"); } catch {}
+        setLoading(false);
+        return;
+      }
+      if (role === "doctor" || role === "clinician") {
+        window.location.href = "/dashboard/patients";
+      } else if (role === "admin" || role === "system_admin" || role === "organization_admin") {
+        window.location.href = "/dashboard/users";
+      } else {
+        window.location.href = "/";
+      }
     } catch {
       setError("Unexpected error. Please try again.");
       setLoading(false);
@@ -72,7 +138,11 @@ export default function AuthSignInPage() {
                 color: "#ffffff",
               }}
             >
-              {mode === "login" ? "Sign in to MAGE" : "Create a MAGE account"}
+              {requestedRole === "doctor"
+                ? mode === "login" ? "Doctor Sign in" : "Create Doctor Account"
+                : requestedRole === "admin"
+                ? mode === "login" ? "Admin Sign in" : "Create Admin Account"
+                : mode === "login" ? "Sign in to MAGE" : "Create a MAGE account"}
             </h1>
             <p
               style={{
@@ -82,8 +152,12 @@ export default function AuthSignInPage() {
                 color: "#bcbac9",
               }}
             >
-              {mode === "login"
-                ? "Use your Google account or email to access assessments, history, and privacy controls."
+              {requestedRole === "doctor"
+                ? "Doctor portal — use your doctor credentials. You’ll be routed to Patients."
+                : requestedRole === "admin"
+                ? "Admin console — use your admin credentials. You’ll be routed to Users & System."
+                : mode === "login"
+                ? "Role-based access: doctors and admins use the same login — you will be routed by role."
                 : "Sign up with email to create a new MAGE account."}
             </p>
           </div>
@@ -194,7 +268,7 @@ export default function AuthSignInPage() {
                   name="password"
                   type="password"
                   required
-                  minLength={6}
+                  minLength={mode === "signup" ? 6 : undefined}
                   className="mt-2 w-full rounded-md border bg-black px-4 py-3 text-white outline-none"
                   style={{
                     fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
@@ -217,6 +291,17 @@ export default function AuthSignInPage() {
                   {error}
                 </p>
               )}
+
+              <div className="rounded-md border px-3 py-2 text-xs" style={{ borderColor: "#3f3a52", background: "rgba(201,180,250,0.06)", color: "#bcbac9" }}>
+                <p style={{ fontWeight: 600, color: "#c9b4fa" }}>Demo logins (no backend needed):</p>
+                {(!requestedRole || requestedRole === "doctor") && (
+                  <p style={{ marginTop: "4px" }}>Doctor: <span style={{ color: "#fff" }}>doctor@mage.health</span> / <span style={{ color: "#fff" }}>doctor123</span></p>
+                )}
+                {(!requestedRole || requestedRole === "admin") && (
+                  <p>Admin: <span style={{ color: "#fff" }}>admin@mage.health</span> / <span style={{ color: "#fff" }}>admin123</span></p>
+                )}
+                {requestedRole && <p style={{ fontSize: "11px", color: "#5a5772", marginTop: "4px" }}>You’re on the {requestedRole} login — the other role will be rejected here.</p>}
+              </div>
 
               <button
                 type="submit"
@@ -279,5 +364,13 @@ export default function AuthSignInPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function AuthSignInPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-white" style={{ color: "#bcbac9" }}>Loading…</div>}>
+      <AuthSignInInner />
+    </Suspense>
   );
 }

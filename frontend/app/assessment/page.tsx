@@ -28,15 +28,19 @@ const modalities = [
   },
 ] as const;
 
+// Public flow shows Face + Hand only; Blood stays available via doctor report flow
+const publicModalities = modalities.filter((m) => m.id !== "blood") as unknown as typeof modalities;
+
 type ModalityId = (typeof modalities)[number]["id"];
+type PublicModalityId = (typeof publicModalities)[number]["id"];
 
 export default function AssessmentPage() {
-  const [active, setActive] = useState<ModalityId[]>(["face", "dorsal_hand", "blood"]);
+  const [active, setActive] = useState<PublicModalityId[]>(["face", "dorsal_hand"]);
   const router = useRouter();
 
-  const toggle = (id: ModalityId) => {
+  const toggle = (id: PublicModalityId) => {
     setActive((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+      current.includes(id) ? (current.filter((item) => item !== id) as PublicModalityId[]) : [...current, id]
     );
   };
 
@@ -95,7 +99,7 @@ export default function AssessmentPage() {
           </p>
 
           <div className="mt-10 grid gap-4">
-            {modalities.map((modality) => {
+            {publicModalities.map((modality) => {
               const isActive = active.includes(modality.id);
               return (
                 <button
