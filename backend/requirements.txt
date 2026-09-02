@@ -4,6 +4,7 @@ pydantic==2.7.1
 python-multipart==0.0.9
 supabase==2.4.5
 python-dotenv
+<<<<<<< HEAD
 xgboost
 shap
 pandas
@@ -11,3 +12,6 @@ numpy
 jinja2
 weasyprint
 google-generativeai
+=======
+PyMuPDF
+>>>>>>> charu
