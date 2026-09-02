@@ -93,7 +93,7 @@ function AuthSignInInner() {
       role = role || "user";
       // Enforce requested role if ?role=doctor|admin was in URL
       if (requestedRole === "doctor" && role !== "doctor" && role !== "clinician") {
-        setError(`This login is for doctors. Your account role is "${role}". Try doctor@mage.health / doctor123`);
+        setError(`This login is for doctors. Your account role is "${role}". Please use a doctor account.`);
         // sign out the mismatched session so user can retry
         try { await fetch("/api/auth/signout", { method: "POST" }); } catch {}
         try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_user"); } catch {}
@@ -101,7 +101,7 @@ function AuthSignInInner() {
         return;
       }
       if (requestedRole === "admin" && role !== "admin" && role !== "system_admin" && role !== "organization_admin") {
-        setError(`This login is for admins. Your account role is "${role}". Try admin@mage.health / admin123`);
+        setError(`This login is for admins. Your account role is "${role}". Please use an admin account.`);
         try { await fetch("/api/auth/signout", { method: "POST" }); } catch {}
         try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_user"); } catch {}
         setLoading(false);
@@ -291,17 +291,6 @@ function AuthSignInInner() {
                   {error}
                 </p>
               )}
-
-              <div className="rounded-md border px-3 py-2 text-xs" style={{ borderColor: "#3f3a52", background: "rgba(201,180,250,0.06)", color: "#bcbac9" }}>
-                <p style={{ fontWeight: 600, color: "#c9b4fa" }}>Demo logins (no backend needed):</p>
-                {(!requestedRole || requestedRole === "doctor") && (
-                  <p style={{ marginTop: "4px" }}>Doctor: <span style={{ color: "#fff" }}>doctor@mage.health</span> / <span style={{ color: "#fff" }}>doctor123</span></p>
-                )}
-                {(!requestedRole || requestedRole === "admin") && (
-                  <p>Admin: <span style={{ color: "#fff" }}>admin@mage.health</span> / <span style={{ color: "#fff" }}>admin123</span></p>
-                )}
-                {requestedRole && <p style={{ fontSize: "11px", color: "#5a5772", marginTop: "4px" }}>You’re on the {requestedRole} login — the other role will be rejected here.</p>}
-              </div>
 
               <button
                 type="submit"

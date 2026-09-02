@@ -667,38 +667,6 @@ export default function Home() {
               )}
             </div>
 
-            <div
-              className="hidden md:flex items-end justify-between"
-              style={{
-                fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
-                fontSize: "12px",
-                fontWeight: 540,
-                lineHeight: 1.4,
-                letterSpacing: "0px",
-                color: "#bcbac9",
-              }}
-            >
-              <div className="flex items-center gap-8">
-                <div>
-                  <span className="block text-white" style={{ fontSize: "20px", fontWeight: 540 }}>
-                    2
-                  </span>
-                  <span className="mt-1 block">Modalities</span>
-                </div>
-                <div>
-                  <span className="block text-white" style={{ fontSize: "20px", fontWeight: 540 }}>
-                    {Math.pow(2, 2) - 1}
-                  </span>
-                  <span className="mt-1 block">Combinations</span>
-                </div>
-                <div>
-                  <span className="block text-white" style={{ fontSize: "20px", fontWeight: 540 }}>
-                    1
-                  </span>
-                  <span className="mt-1 block">Fusion layer</span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </section>

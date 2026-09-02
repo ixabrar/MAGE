@@ -8,8 +8,8 @@ const mockEvents = [
   { id: "E-003", action: "REPORT_UPLOADED", actor: "dr.smith@mage.health", role: "doctor", resource: "patients/9f3b/reports/1", result: "success", timestamp: "2026-09-01T08:15:00Z", detail: "type: pdf, size: 1.2MB" },
   { id: "E-004", action: "PREDICTION_RUN", actor: "system", role: "system", resource: "patients/9f3b", result: "success", timestamp: "2026-09-01T08:15:30Z", detail: "fused_age: 34.2, gap: +2.1" },
   { id: "E-005", action: "DOCTOR_REMARK_SAVED", actor: "dr.smith@mage.health", role: "doctor", resource: "patients/9f3b/history", result: "success", timestamp: "2026-09-01T08:18:00Z", detail: "history anonymized" },
-  { id: "E-006", action: "ADMIN_CREATED_DOCTOR", actor: "admin@mage.health", role: "admin", resource: "profiles/abc...", result: "success", timestamp: "2026-09-01T09:00:00Z", detail: "role: doctor" },
-  { id: "E-007", action: "ADMIN_DISABLED_DOCTOR", actor: "admin@mage.health", role: "admin", resource: "profiles/def...", result: "success", timestamp: "2026-09-01T09:05:00Z", detail: "soft_delete" },
+  { id: "E-006", action: "ADMIN_CREATED_DOCTOR", actor: "admin@example.com", role: "admin", resource: "profiles/abc...", result: "success", timestamp: "2026-09-01T09:00:00Z", detail: "role: doctor" },
+  { id: "E-007", action: "ADMIN_DISABLED_DOCTOR", actor: "admin@example.com", role: "admin", resource: "profiles/def...", result: "success", timestamp: "2026-09-01T09:05:00Z", detail: "soft_delete" },
 ];
 
 export default function AuditClient() {
