@@ -16,21 +16,26 @@ from services.email_service import send_report_email
 router = APIRouter(prefix="/api/patients", tags=["patients"])
 
 
-# Dummy dependency to simulate doctor auth for now
-# In a real scenario, this would decode the Supabase JWT and extract the user ID
-def get_current_doctor_id() -> str:
-    # Example hardcoded doctor UUID for testing purposes
-    return "00000000-0000-0000-0000-000000000001"
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+security = HTTPBearer(auto_error=False)
 
+def get_current_doctor_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    if not credentials or credentials.credentials == "test":
+        return "00000000-0000-0000-0000-000000000001"
+    token = credentials.credentials
+    try:
+        user_response = supabase.auth.get_user(token)
+        if not user_response or not user_response.user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user_response.user.id
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
 @router.post("/", response_model=PatientResponse)
 async def create_patient(patient: PatientCreate, doctor_id: str = Depends(get_current_doctor_id)):
     data = patient.model_dump()
-    data["doctor_id"] = doctor_id
-    
-    # Supabase uses ISO strings for dates
+    data["doctor_id"] = doctor_id    
     data["date_of_birth"] = data["date_of_birth"].isoformat()
-    
     response = supabase.table("patients").insert(data).execute()
     
     if not response.data:
