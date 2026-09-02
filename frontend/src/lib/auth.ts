@@ -132,5 +132,5 @@ export const { handlers, auth } = NextAuth({
   pages: {
     signIn: "/auth/signin",
   },
-  secret: process.env.AUTH_SECRET,
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "mage_dev_secret_key_32_characters_long_min_12345",
 });
