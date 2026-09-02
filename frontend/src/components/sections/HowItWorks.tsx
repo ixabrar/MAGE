@@ -3,39 +3,115 @@
 import { motion } from "framer-motion";
 
 const steps = [
-  { n: "01", title: "Choose", sub: "Face or Hand", desc: "Pick one or both. No account needed." },
-  { n: "02", title: "Upload", sub: "Secure & private", desc: "Encrypted, validated, never public." },
-  { n: "03", title: "AI encodes", sub: "Separate models", desc: "Each signal has its own encoder." },
-  { n: "04", title: "Get age", sub: "Fused estimate", desc: "One coherent result, instantly." },
+  {
+    title: "Input",
+    description:
+      "The user provides whichever biological signals are available: face, dorsal-hand, and/or blood-report inputs.",
+  },
+  {
+    title: "Modality-specific encoding",
+    description:
+      "Each independent modality encoder turns its input into a learned representation without depending on the others.",
+  },
+  {
+    title: "Fusion",
+    description:
+      "The fusion layer combines the available representations into a single coherent biological-age estimate.",
+  },
+  {
+    title: "Estimate",
+    description:
+      "MAGE returns an estimated biological age alongside the modality provenance, model versions, and disclaimers.",
+  },
 ] as const;
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="py-14 sm:py-16 bg-[#070709]" suppressHydrationWarning>
+    <section className="py-24 bg-black" suppressHydrationWarning>
       <div className="mx-auto max-w-7xl px-6 sm:px-10 lg:px-16">
-        <div className="text-center">
-          <p className="text-xs font-semibold uppercase tracking-[1.6px]" style={{ color: "#c9b4fa" }}>How it works</p>
-          <h2 className="mx-auto mt-2 max-w-xl text-3xl font-semibold tracking-tight sm:text-4xl" style={{ fontFamily: "var(--font-display,'Rajdhani'),system-ui,sans-serif", color: "#fff" }}>
-            Four steps.
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed" style={{ color: "#bcbac9" }}>Simple, quick, and secure — no jargon.</p>
-        </div>
+        <h2
+          className="text-4xl font-medium tracking-tight"
+          style={{
+            fontFamily: "'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+            fontSize: "48px",
+            fontWeight: 460,
+            lineHeight: 0.96,
+            letterSpacing: "-1.32px",
+            color: "#ffffff",
+          }}
+        >
+          How MAGE works
+        </h2>
+        <p
+          className="mt-6 max-w-2xl text-lg"
+          style={{
+            fontFamily: "'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+            fontSize: "18px",
+            fontWeight: 540,
+            lineHeight: 1.5,
+            letterSpacing: "-0.135px",
+            color: "#bcbac9",
+          }}
+        >
+          MAGE does not rely on a single monolithic model. Each available modality is processed independently, then
+          fused into one estimate.
+        </p>
 
-        <div className="mx-auto mt-10 grid max-w-4xl gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {steps.map((s, i) => (
+        <div className="mt-16 grid gap-6 md:grid-cols-4">
+          {steps.map((step, index) => (
             <motion.div
-              key={s.n}
-              initial={{ opacity: 0, y: 8 }}
+              key={step.title}
+              className="rounded-xl border p-6"
+              initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.35, delay: i * 0.06 }}
-              className="rounded-xl border bg-[#0e0c1f] p-6 text-center"
-              style={{ borderColor: "#1e1c2a" }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.6, delay: index * 0.1 }}
+              style={{
+                background: "#000000",
+                borderColor: "#3f3a52",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              }}
             >
-              <p className="text-xs font-bold tracking-[1.4px]" style={{ color: "#c9b4fa" }}>{s.n}</p>
-              <h3 className="mt-2 text-base font-semibold" style={{ color: "#fff" }}>{s.title}</h3>
-              <p className="mt-1 text-sm font-medium" style={{ color: "#c9b4fa" }}>{s.sub}</p>
-              <p className="mx-auto mt-2 max-w-[20ch] text-sm leading-relaxed" style={{ color: "#bcbac9" }}>{s.desc}</p>
+              <span
+                className="text-sm"
+                style={{
+                  fontFamily: "'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  lineHeight: 1.0,
+                  letterSpacing: "1.8px",
+                  textTransform: "uppercase",
+                  color: "#c9b4fa",
+                }}
+              >
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <h3
+                className="mt-3 text-xl font-medium"
+                style={{
+                  fontFamily: "'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                  fontSize: "22px",
+                  fontWeight: 460,
+                  lineHeight: 1.1,
+                  letterSpacing: "-0.315px",
+                  color: "#ffffff",
+                }}
+              >
+                {step.title}
+              </h3>
+              <p
+                className="mt-3 text-base"
+                style={{
+                  fontFamily: "'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                  fontSize: "16px",
+                  fontWeight: 460,
+                  lineHeight: 1.5,
+                  letterSpacing: "0px",
+                  color: "#bcbac9",
+                }}
+              >
+                {step.description}
+              </p>
             </motion.div>
           ))}
         </div>
