@@ -1,15 +1,17 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from typing import List
 from uuid import UUID
 from datetime import datetime, date
 import io
+import os
 
 from core.supabase import supabase
 from schemas.patient import PatientCreate, PatientUpdate, PatientResponse, PatientHistoryRecord, PatientHistoryRecordCreate, BioAgePredictionRequest
 from services.bio_age_service import predict_bio_age_and_explain
 from services.pdf_service import generate_bio_age_pdf
 from services.llm_service import generate_health_recommendations
+from services.email_service import send_report_email
 
 router = APIRouter(prefix="/api/patients", tags=["patients"])
 
@@ -151,6 +153,14 @@ async def predict_bio_age(
     # Generate PDF
     try:
         pdf_bytes = generate_bio_age_pdf(str(patient_id), analysis_results)
+        
+        # Save to uploads directory
+        uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+        os.makedirs(uploads_dir, exist_ok=True)
+        pdf_path = os.path.join(uploads_dir, f"bio_age_report_{patient_id}.pdf")
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF generation error: {str(e)}")
         
@@ -163,3 +173,32 @@ async def predict_bio_age(
             "Content-Disposition": f"attachment; filename=bio_age_report_{patient_id}.pdf"
         }
     )
+
+@router.post("/{patient_id}/email-report")
+async def email_patient_report(
+    patient_id: UUID, 
+    background_tasks: BackgroundTasks,
+    doctor_id: str = Depends(get_current_doctor_id)
+):
+    # Verify ownership
+    verify = supabase.table("patients").select("*").eq("id", str(patient_id)).eq("doctor_id", doctor_id).execute()
+    if not verify.data:
+        raise HTTPException(status_code=404, detail="Patient not found or unauthorized")
+        
+    patient_data = verify.data[0]
+    patient_email = patient_data.get("email")
+    patient_name = f"{patient_data.get('first_name')} {patient_data.get('last_name')}"
+    
+    if not patient_email:
+        raise HTTPException(status_code=400, detail="Patient does not have an email address configured.")
+        
+    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+    pdf_path = os.path.join(uploads_dir, f"bio_age_report_{patient_id}.pdf")
+    
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="PDF report not found. Please generate the report first.")
+        
+    # Send email in the background
+    background_tasks.add_task(send_report_email, patient_email, patient_name, pdf_path)
+    
+    return {"status": "success", "message": f"Email is being sent to {patient_email}"}
