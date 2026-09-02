@@ -10,6 +10,5 @@ pandas
 numpy
 jinja2
 weasyprint
-google-generativeai
 google-genai
 PyMuPDF
