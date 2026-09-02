@@ -28,11 +28,17 @@ export default async function DashboardLayout({
   }
 
   if (!session?.user) {
-    redirect("/login");
+    redirect("/auth/signin");
   }
 
   const role = (session.user.role ?? "user") as UserRole;
 
+  // General user has no dashboard — role-based landing per spec
+  if (role === "user") {
+    redirect("/");
+  }
+
+  // Admin trying to access doctor area handled by middleware, but double-check here
   return (
     <AppShellProvider role={role}>
       <DashboardShell user={session.user}>{children}</DashboardShell>

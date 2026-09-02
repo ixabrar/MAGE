@@ -1,24 +1,26 @@
 import "next-auth";
 import "next-auth/jwt";
 
+type AppRole = "user" | "clinician" | "doctor" | "admin" | "organization_admin" | "ml_researcher" | "system_admin";
+
 declare module "next-auth" {
   interface Session {
     user: {
       id: string;
       email: string;
       name?: string;
-      role: "user" | "clinician" | "organization_admin" | "ml_researcher" | "system_admin";
+      role: AppRole;
     };
   }
 
   interface User {
-    role?: "user" | "clinician" | "organization_admin" | "ml_researcher" | "system_admin";
+    role?: AppRole;
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     id: string;
-    role: "user" | "clinician" | "organization_admin" | "ml_researcher" | "system_admin";
+    role: AppRole;
   }
 }

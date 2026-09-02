@@ -15,10 +15,17 @@ from schemas.fusion import ModelPrediction, ARMModelResult, FusionResult
 
 
 def _ensure_fusion_layer_importable() -> Path:
-    fusion_layer_path = Path(__file__).resolve().parents[2] / "fusion-layer"
-    fusion_layer_str = str(fusion_layer_path)
-    if fusion_layer_str not in sys.path:
-        sys.path.insert(0, fusion_layer_str)
+    # Repo layout: backend/src/services/foo.py -> parents[3] is repo root (MAGE/)
+    fusion_layer_path = Path(__file__).resolve().parents[3] / "fusion-layer"
+    # Also try parents[2] for legacy layout
+    alt_path = Path(__file__).resolve().parents[2] / "fusion-layer"
+    for p in [fusion_layer_path, alt_path]:
+        ps = str(p)
+        if ps not in sys.path and p.exists():
+            sys.path.insert(0, ps)
+    # Ensure at least the primary exists
+    if str(fusion_layer_path) not in sys.path:
+        sys.path.insert(0, str(fusion_layer_path))
     return fusion_layer_path
 
 

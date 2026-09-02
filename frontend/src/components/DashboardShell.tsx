@@ -64,7 +64,10 @@ export function DashboardShell({ user, children }: { user: { id?: string; name?:
             {user.name ?? user.email}
           </span>
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => {
+              try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_refresh_token"); localStorage.removeItem("mage_user"); } catch {}
+              signOut({ callbackUrl: "/login" });
+            }}
             className="border border-white/35 px-4 py-1 text-white transition-colors duration-150 hover:border-white hover:bg-white/6"
             style={{
               fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",

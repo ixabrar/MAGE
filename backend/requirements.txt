@@ -10,5 +10,6 @@ pandas
 numpy
 jinja2
 weasyprint
-google-genai
-PyMuPDF
+torch
+torchvision
+pillow
