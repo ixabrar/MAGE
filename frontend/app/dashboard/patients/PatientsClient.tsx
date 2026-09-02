@@ -22,7 +22,7 @@ export default function PatientsClient() {
   const [offline, setOffline] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);
-  const [form, setForm] = useState({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "" });
+  const [form, setForm] = useState({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "", email: "" });
   const [submitting, setSubmitting] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -106,7 +106,7 @@ export default function PatientsClient() {
       }
       setShowAdd(false);
       setEditing(null);
-      setForm({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "" });
+      setForm({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "", email: "" });
       await load();
     } catch (e: any) {
       setError(e.message || "Save failed");
@@ -123,6 +123,7 @@ export default function PatientsClient() {
       date_of_birth: p.date_of_birth?.slice(0, 10) || "",
       gender: p.gender || "male",
       contact_number: p.contact_number || "",
+      email: p.email || "",
     });
     setShowAdd(true);
   }
@@ -177,7 +178,7 @@ export default function PatientsClient() {
         <button
           onClick={() => {
             setEditing(null);
-            setForm({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "" });
+            setForm({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "", email: "" });
             setShowAdd(true);
           }}
           className="rounded-full px-6 py-2.5 text-sm font-semibold"
@@ -289,9 +290,15 @@ export default function PatientsClient() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Contact number</label>
-                <input value={form.contact_number} onChange={(e) => setForm({ ...form, contact_number: e.target.value })} placeholder="+91…" className="mt-2 w-full rounded-md border bg-black px-4 py-2.5 text-sm outline-none" style={{ borderColor: "#3f3a52", color: "#fff" }} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Contact number</label>
+                  <input value={form.contact_number} onChange={(e) => setForm({ ...form, contact_number: e.target.value })} placeholder="+91…" className="mt-2 w-full rounded-md border bg-black px-4 py-2.5 text-sm outline-none" style={{ borderColor: "#3f3a52", color: "#fff" }} />
+                </div>
+                <div>
+                  <label className="text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Email address</label>
+                  <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="patient@example.com" className="mt-2 w-full rounded-md border bg-black px-4 py-2.5 text-sm outline-none" style={{ borderColor: "#3f3a52", color: "#fff" }} />
+                </div>
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => { setShowAdd(false); setEditing(null); }} className="rounded-full border px-5 py-2 text-sm font-semibold" style={{ borderColor: "#3f3a52", color: "#bcbac9" }}>Cancel</button>

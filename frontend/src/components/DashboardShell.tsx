@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useAppShell } from "@/context/AppShellContext";
 
 const ICONS: Record<string, string> = {
@@ -21,6 +21,14 @@ const ICONS: Record<string, string> = {
 };
 
 export function DashboardShell({ user, children }: { user: { id?: string; name?: string; email: string; role?: string }; children: React.ReactNode }) {
+  const { status } = useSession();
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      window.location.replace("/login");
+    }
+  }, [status]);
+
   const { navigation, role } = useAppShell();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -30,9 +38,9 @@ export function DashboardShell({ user, children }: { user: { id?: string; name?:
     return pathname.startsWith(href);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_refresh_token"); localStorage.removeItem("mage_user"); } catch {}
-    signOut({ callbackUrl: "/login" });
+    await signOut({ callbackUrl: "/login" });
   };
 
   return (

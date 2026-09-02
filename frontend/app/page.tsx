@@ -63,13 +63,24 @@ function buildPanelState(active: ModalityId[]) {
 }
 
 export default function Home() {
+  const { data: session, status } = useSession();
+
+  const handleSignOut = async () => {
+    try {
+      localStorage.removeItem("mage_access_token");
+      localStorage.removeItem("mage_refresh_token");
+      localStorage.removeItem("mage_user");
+    } catch {}
+    await signOut({ redirect: false });
+    window.location.replace("/");
+  };
+
   const [activeModalities, setActiveModalities] = useState<PublicModalityId[]>(["face", "dorsal_hand"]);
   const panel = useMemo(() => buildPanelState(activeModalities), [activeModalities]);
   const heroRef = useRef<HTMLDivElement | null>(null);
   const heroSectionRef = useRef<HTMLDivElement | null>(null);
   const fieldRef = useRef<{ triggerExplosion: (x: number, y: number) => void } | null>(null);
   const audioRef = useRef<{ playClick: () => void } | null>(null);
-  const { data: session, status } = useSession();
   const role = (session?.user as any)?.role as string | undefined;
   const isLoggedIn = !!session?.user;
   const isDoctor = role === "doctor" || role === "clinician";
@@ -277,7 +288,7 @@ export default function Home() {
                     {session?.user?.email}
                   </span>
                   <button
-                    onClick={() => signOut({ callbackUrl: "/" })}
+                    onClick={handleSignOut}
                     className="rounded-full border px-5 py-2 text-sm font-semibold transition-colors duration-150 hover:border-white hover:bg-white/10"
                     style={{
                       fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
@@ -347,7 +358,7 @@ export default function Home() {
                     {session?.user?.email}
                   </span>
                   <button
-                    onClick={() => signOut({ callbackUrl: "/" })}
+                    onClick={handleSignOut}
                     className="rounded-full border px-5 py-2 text-sm font-semibold transition-colors duration-150 hover:border-white hover:bg-white/10"
                     style={{
                       fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
@@ -390,7 +401,7 @@ export default function Home() {
                     {session?.user?.email}
                   </span>
                   <button
-                    onClick={() => signOut({ callbackUrl: "/" })}
+                    onClick={handleSignOut}
                     className="rounded-full border px-5 py-2 text-sm font-semibold"
                     style={{ borderColor: "#3f3a52", color: "#bcbac9", fontSize: "14px", fontWeight: 600 }}
                   >

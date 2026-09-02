@@ -63,6 +63,7 @@ export type PatientCreate = {
   date_of_birth: string; // ISO date yyyy-mm-dd
   gender: string;
   contact_number?: string;
+  email?: string;
 };
 export type Patient = PatientCreate & {
   id: string;
@@ -108,6 +109,21 @@ export function addPatientHistory(
     body: JSON.stringify(data),
     auth: true,
   });
+}
+export async function uploadHistoryPdf(historyId: string, blob: Blob): Promise<{ status: string; message: string }> {
+  const fd = new FormData();
+  fd.append("file", blob, "report.pdf");
+  return apiFetch(`/api/patients/history/${historyId}/pdf`, { method: "POST", body: fd, auth: true });
+}
+export async function viewHistoryPdf(historyId: string): Promise<void> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}/api/patients/history/${historyId}/pdf`, { headers });
+  if (!res.ok) throw new Error("PDF not found or unauthorized");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank");
 }
 
 // Assessment (public)
@@ -211,6 +227,10 @@ export async function predictBioAgePdf(patientId: string, payload: BioAgePredict
     throw err;
   }
   return await res.blob();
+}
+
+export async function emailReport(patientId: string): Promise<{ status: string; message: string }> {
+  return apiFetch(`/api/patients/${patientId}/email-report`, { method: "POST", auth: true });
 }
 
 // Dorsal hand — ResNet18 (resnet18_consistent_age_best.pth)
