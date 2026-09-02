@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { listPatients, type Patient } from "@/lib/api";
+import { listPatients, getPatient, viewHistoryPdf, type Patient } from "@/lib/api";
 
 export default function DoctorHistoryClient() {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -13,24 +13,15 @@ export default function DoctorHistoryClient() {
     (async () => {
       try {
         const data = await listPatients().catch(async () => {
-          const base = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-          const r = await fetch(`${base}/api/patients/`);
-          if (!r.ok) return [];
-          const j = await r.json();
-          return Array.isArray(j) ? j : j?.patients ?? [];
+          return [];
         });
         const arr = Array.isArray(data) ? data : [];
-        // need to fetch each patient detail to get history? Our list may not include history. Try enrich.
         const enriched: Patient[] = [];
         for (const p of arr.slice(0, 20)) {
           try {
-            const base = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-            const r = await fetch(`${base}/api/patients/${p.id}`);
-            if (r.ok) {
-              const detail = await r.json();
-              enriched.push(detail);
-              continue;
-            }
+            const detail = await getPatient(p.id);
+            enriched.push(detail);
+            continue;
           } catch {}
           enriched.push({ ...p, history: [] } as Patient);
         }
@@ -100,10 +91,11 @@ export default function DoctorHistoryClient() {
               <tr style={{ borderBottom: "1px solid #3f3a52" }}>
                 <th className="px-6 py-4 text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Date</th>
                 <th className="px-6 py-4 text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Patient</th>
-                <th className="px-6 py-4 text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Chrono</th>
-                <th className="px-6 py-4 text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Bio</th>
-                <th className="px-6 py-4 text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Gap</th>
-                <th className="px-6 py-4 text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}></th>
+                <th className="px-6 py-4 font-semibold uppercase" style={{ color: "#c9b4fa" }}>Chronological</th>
+                <th className="px-6 py-4 font-semibold uppercase" style={{ color: "#c9b4fa" }}>Bio (Predicted)</th>
+                <th className="px-6 py-4 font-semibold uppercase" style={{ color: "#c9b4fa" }}>Bio-Age Gap</th>
+                <th className="px-6 py-4 font-semibold uppercase" style={{ color: "#c9b4fa" }}>Action</th>
+                <th className="px-6 py-4 font-semibold uppercase" style={{ color: "#c9b4fa" }}>Report</th>
               </tr>
             </thead>
             <tbody>
@@ -120,6 +112,16 @@ export default function DoctorHistoryClient() {
                     <Link href={`/dashboard/patients/${r.patientId}`} className="rounded-full border px-3 py-1 text-xs" style={{ borderColor: "#3f3a52", color: "#bcbac9" }}>
                       Open
                     </Link>
+                  </td>
+                  <td className="px-6 py-4">
+                    <button 
+                      onClick={() => viewHistoryPdf(r.id).catch(e => alert(e.message))}
+                      className="rounded-full border px-3 py-1 text-xs transition-colors hover:bg-white/5" 
+                      style={{ borderColor: "#3f3a52", color: "#c9b4fa" }}
+                      title="View exact values for this assessment"
+                    >
+                      View PDF
+                    </button>
                   </td>
                 </tr>
               ))}

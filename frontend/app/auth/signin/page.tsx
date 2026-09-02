@@ -88,22 +88,22 @@ function AuthSignInInner() {
             const sess = await sessRes.json();
             role = sess?.user?.role || (sess as any)?.role || null;
           }
-        } catch {}
+        } catch { }
       }
       role = role || "user";
       // Enforce requested role if ?role=doctor|admin was in URL
       if (requestedRole === "doctor" && role !== "doctor" && role !== "clinician") {
         setError(`This login is for doctors. Your account role is "${role}". Try doctor@mage.health / doctor123`);
         // sign out the mismatched session so user can retry
-        try { await fetch("/api/auth/signout", { method: "POST" }); } catch {}
-        try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_user"); } catch {}
+        try { await fetch("/api/auth/signout", { method: "POST" }); } catch { }
+        try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_user"); } catch { }
         setLoading(false);
         return;
       }
       if (requestedRole === "admin" && role !== "admin" && role !== "system_admin" && role !== "organization_admin") {
         setError(`This login is for admins. Your account role is "${role}". Try admin@mage.health / admin123`);
-        try { await fetch("/api/auth/signout", { method: "POST" }); } catch {}
-        try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_user"); } catch {}
+        try { await fetch("/api/auth/signout", { method: "POST" }); } catch { }
+        try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_user"); } catch { }
         setLoading(false);
         return;
       }
@@ -141,8 +141,8 @@ function AuthSignInInner() {
               {requestedRole === "doctor"
                 ? mode === "login" ? "Doctor Sign in" : "Create Doctor Account"
                 : requestedRole === "admin"
-                ? mode === "login" ? "Admin Sign in" : "Create Admin Account"
-                : mode === "login" ? "Sign in to MAGE" : "Create a MAGE account"}
+                  ? mode === "login" ? "Admin Sign in" : "Create Admin Account"
+                  : mode === "login" ? "Sign in to MAGE" : "Create a MAGE account"}
             </h1>
             <p
               style={{
@@ -155,10 +155,10 @@ function AuthSignInInner() {
               {requestedRole === "doctor"
                 ? "Doctor portal — use your doctor credentials. You’ll be routed to Patients."
                 : requestedRole === "admin"
-                ? "Admin console — use your admin credentials. You’ll be routed to Users & System."
-                : mode === "login"
-                ? "Role-based access: doctors and admins use the same login — you will be routed by role."
-                : "Sign up with email to create a new MAGE account."}
+                  ? "Admin console — use your admin credentials. You’ll be routed to Users & System."
+                  : mode === "login"
+                    ? "Role-based access: doctors and admins use the same login — you will be routed by role."
+                    : "Sign up with email to create a new MAGE account."}
             </p>
           </div>
 

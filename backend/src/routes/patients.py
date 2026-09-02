@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File
+from fastapi.responses import StreamingResponse, FileResponse
 from typing import List
 from uuid import UUID
 from datetime import datetime, date
@@ -205,3 +205,50 @@ async def email_patient_report(
     background_tasks.add_task(send_report_email, patient_email, patient_name, pdf_path)
     
     return {"status": "success", "message": f"Email is being sent to {patient_email}"}
+
+
+@router.post("/history/{history_id}/pdf")
+async def upload_history_pdf(
+    history_id: UUID,
+    file: UploadFile = File(...),
+    doctor_id: str = Depends(get_current_doctor_id)
+):
+    # Verify ownership of the history record
+    verify = supabase.table("patient_history_records").select("id, patient_id").eq("id", str(history_id)).eq("doctor_id", doctor_id).execute()
+    if not verify.data:
+        raise HTTPException(status_code=404, detail="History record not found or unauthorized")
+        
+    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    pdf_path = os.path.join(uploads_dir, f"history_{history_id}.pdf")
+    
+    try:
+        content = await file.read()
+        with open(pdf_path, "wb") as f:
+            f.write(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save PDF: {str(e)}")
+        
+    return {"status": "success", "message": "PDF linked to history record"}
+
+@router.get("/history/{history_id}/pdf")
+async def get_history_pdf(
+    history_id: UUID,
+    doctor_id: str = Depends(get_current_doctor_id)
+):
+    # Verify ownership
+    verify = supabase.table("patient_history_records").select("id").eq("id", str(history_id)).eq("doctor_id", doctor_id).execute()
+    if not verify.data:
+        raise HTTPException(status_code=404, detail="History record not found or unauthorized")
+        
+    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+    pdf_path = os.path.join(uploads_dir, f"history_{history_id}.pdf")
+    
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="PDF report not found for this history record")
+        
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=f"bio_age_report_history_{history_id}.pdf"
+    )
