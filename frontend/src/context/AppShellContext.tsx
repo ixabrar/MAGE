@@ -14,17 +14,25 @@ interface AppShellContextValue {
 }
 
 const NAVIGATION: Record<UserRole, NavItem[]> = {
-  user: [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/dashboard/assessments", label: "New Assessment" },
-    { href: "/dashboard/history", label: "History" },
-    { href: "/dashboard/privacy", label: "Privacy" },
-  ],
+  user: [], // General user has no dashboard — public landing only per spec
   clinician: [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/dashboard/patients", label: "Patients" },
     { href: "/dashboard/assessments", label: "Assessments" },
     { href: "/dashboard/history", label: "History" },
+  ],
+  doctor: [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard/patients", label: "Patients" },
+    { href: "/dashboard/assessments", label: "Assessments" },
+    { href: "/dashboard/history", label: "History" },
+  ],
+  admin: [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard/users", label: "Users" },
+    { href: "/dashboard/organizations", label: "Organizations" },
+    { href: "/dashboard/models", label: "Models" },
+    { href: "/dashboard/audit", label: "Audit Logs" },
   ],
   organization_admin: [
     { href: "/dashboard", label: "Dashboard" },

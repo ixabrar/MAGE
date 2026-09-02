@@ -23,6 +23,8 @@ export const metadata: Metadata = {
     "A scalable multimodal biological-age estimation framework combining facial, dorsal-hand, and blood-derived signals through a modality-aware fusion layer.",
 };
 
+import { Providers } from "./providers";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -31,7 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${rajdhani.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

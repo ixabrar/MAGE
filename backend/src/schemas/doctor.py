@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr
+from typing import Optional
 
 
 class DoctorCreate(BaseModel):
@@ -8,12 +9,12 @@ class DoctorCreate(BaseModel):
 
 
 class DoctorUpdate(BaseModel):
-    full_name: str | None = None
-    email: EmailStr | None = None
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
 
 
 class DoctorResponse(BaseModel):
     id: str
-    email: str | None
+    email: Optional[str] = None
     full_name: str
     role: str
