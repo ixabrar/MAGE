@@ -9,6 +9,7 @@ from core.supabase import supabase
 from schemas.patient import PatientCreate, PatientUpdate, PatientResponse, PatientHistoryRecord, PatientHistoryRecordCreate, BioAgePredictionRequest
 from services.bio_age_service import predict_bio_age_and_explain
 from services.pdf_service import generate_bio_age_pdf
+from services.llm_service import generate_health_recommendations
 
 router = APIRouter(prefix="/api/patients", tags=["patients"])
 
@@ -135,6 +136,15 @@ async def predict_bio_age(
     try:
         features_dict = payload.model_dump()
         analysis_results = predict_bio_age_and_explain(features_dict, float(chronological_age))
+        
+        # Add LLM recommendations if the age gap is positive
+        if analysis_results.get("bio_age_gap", 0) > 0:
+            factors = analysis_results.get("top_contributing_factors", [])
+            recommendations_html = generate_health_recommendations(factors)
+            analysis_results["recommendations"] = recommendations_html
+        else:
+            analysis_results["recommendations"] = ""
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
         
