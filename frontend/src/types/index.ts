@@ -1,4 +1,4 @@
-export type UserRole = "user" | "clinician" | "organization_admin" | "ml_researcher" | "system_admin";
+export type UserRole = "user" | "clinician" | "doctor" | "admin" | "organization_admin" | "ml_researcher" | "system_admin";
 
 export interface AppUser {
   id: string;

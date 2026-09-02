@@ -10,9 +10,6 @@ router = APIRouter(
 )
 
 
-
-
-
 @router.post("")
 async def create_doctor(data: DoctorCreate):
 
@@ -73,10 +70,6 @@ async def create_doctor(data: DoctorCreate):
         )
 
 
-# =========================
-# 2. GET ALL DOCTORS
-# =========================
-
 @router.get("")
 async def get_all_doctors():
 
@@ -121,9 +114,6 @@ async def get_all_doctors():
         )
 
 
-# =========================
-# 3. GET DOCTOR BY ID
-# =========================
 
 @router.get("/{doctor_id}")
 async def get_doctor_by_id(doctor_id: str):
@@ -176,9 +166,6 @@ async def get_doctor_by_id(doctor_id: str):
         )
 
 
-# =========================
-# 4. UPDATE DOCTOR
-# =========================
 
 @router.put("/{doctor_id}")
 async def update_doctor(
@@ -250,9 +237,6 @@ async def update_doctor(
         )
 
 
-# =========================
-# 5. DELETE DOCTOR
-# =========================
 
 @router.delete("/{doctor_id}")
 async def delete_doctor(doctor_id: str):

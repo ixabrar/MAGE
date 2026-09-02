@@ -1,12 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-
-type AgeBin = "18-25" | "26-35" | "36-45" | "46+";
-
-const AGE_BINS: AgeBin[] = ["18-25", "26-35", "36-45", "46+"];
 
 export default function AssessmentResultInner() {
   const router = useRouter();
@@ -21,25 +17,10 @@ export default function AssessmentResultInner() {
     result: {
       fused_predicted_age: number;
       fused_confidence: number;
-      fused_age_bins: Record<AgeBin, number>;
+      fused_age_bins: Record<string, number>;
       model_contributions: Record<string, number>;
     };
   } | null>(null);
-
-  const chronologicalAge = result?.result ? 24 : null;
-  const difference = useMemo(() => {
-    if (!result || chronologicalAge === null) return null;
-    return Number((result.result.fused_predicted_age - chronologicalAge).toFixed(1));
-  }, [result, chronologicalAge]);
-
-  const contributionPercentages = useMemo(() => {
-    if (!result) return {};
-    const percentages: Record<string, number> = {};
-    for (const [model, weight] of Object.entries(result.result.model_contributions)) {
-      percentages[model] = Number((weight * 100).toFixed(1));
-    }
-    return percentages;
-  }, [result]);
 
   useEffect(() => {
     if (!assessmentId) {
@@ -52,7 +33,8 @@ export default function AssessmentResultInner() {
 
     async function load() {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/assessment/${assessmentId}`);
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+        const response = await fetch(`${apiBase}/api/assessment/${assessmentId}`);
         if (!response.ok) {
           const error = await response.json();
           throw new Error(error.detail || "Failed to load assessment");
@@ -192,145 +174,11 @@ export default function AssessmentResultInner() {
                 </p>
               </motion.div>
 
-              <div className="mt-10 grid gap-6 md:grid-cols-2">
-                <div
-                  className="rounded-xl border p-6"
-                  style={{
-                    background: "#000000",
-                    borderColor: "#3f3a52",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                  }}
-                >
-                  <p
-                    className="text-sm"
-                    style={{
-                      fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      lineHeight: 1.0,
-                      letterSpacing: "1.8px",
-                      textTransform: "uppercase",
-                      color: "#c9b4fa",
-                    }}
-                  >
-                    Chronological age
-                  </p>
-                  <p className="mt-2 text-3xl font-medium" style={{
-                    fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                    fontSize: "32px",
-                    fontWeight: 540,
-                    lineHeight: 1,
-                    letterSpacing: "0px",
-                    color: "#ffffff",
-                  }}>
-                    {chronologicalAge ?? "—"}
-                  </p>
-                  <p className="mt-2 text-sm" style={{
-                    fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                    fontSize: "14px",
-                    fontWeight: 460,
-                    lineHeight: 1.4,
-                    letterSpacing: "0px",
-                    color: "#bcbac9",
-                  }}>
-                    years
-                  </p>
-                </div>
-                <div
-                  className="rounded-xl border p-6"
-                  style={{
-                    background: "#000000",
-                    borderColor: "#3f3a52",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                  }}
-                >
-                  <p
-                    className="text-sm"
-                    style={{
-                      fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      lineHeight: 1.0,
-                      letterSpacing: "1.8px",
-                      textTransform: "uppercase",
-                      color: "#c9b4fa",
-                    }}
-                  >
-                    Difference
-                  </p>
-                  <p className="mt-2 text-3xl font-medium" style={{
-                    fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                    fontSize: "32px",
-                    fontWeight: 540,
-                    lineHeight: 1,
-                    letterSpacing: "0px",
-                    color: "#ffffff",
-                  }}>
-                    {difference !== null ? `${difference > 0 ? "+" : ""}${difference}` : "—"}
-                  </p>
-                  <p className="mt-2 text-sm" style={{
-                    fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                    fontSize: "14px",
-                    fontWeight: 460,
-                    lineHeight: 1.4,
-                    letterSpacing: "0px",
-                    color: "#bcbac9",
-                  }}>
-                    years
-                  </p>
-                </div>
-              </div>
+              <p className="mt-6 text-sm" style={{ color: "#5a5772" }}>
+                Dorsal-hand estimate from ResNet18 (128M). For public assessments only the predicted age is shown.
+              </p>
 
-              <div className="mt-10 rounded-xl border p-6" style={{
-                background: "#000000",
-                borderColor: "#3f3a52",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-              }}>
-                <p
-                  className="text-sm"
-                  style={{
-                    fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    lineHeight: 1.0,
-                    letterSpacing: "1.8px",
-                    textTransform: "uppercase",
-                    color: "#c9b4fa",
-                  }}
-                >
-                  Model contributions
-                </p>
-                <div className="mt-4 space-y-3">
-                  {AGE_BINS.map((bin) => {
-                    const value = result.result.fused_age_bins[bin] ?? 0;
-                    return (
-                      <div key={bin}>
-                        <div className="flex items-center justify-between text-sm" style={{ color: "#bcbac9" }}>
-                          <span>{bin}</span>
-                          <span>{(value * 100).toFixed(1)}%</span>
-                        </div>
-                        <div className="mt-1 h-2 rounded-full" style={{ background: "#3f3a52" }}>
-                          <div
-                            className="h-2 rounded-full"
-                            style={{ width: `${Math.min(value * 100, 100)}%`, background: "#c9b4fa" }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-6 grid gap-3 md:grid-cols-3">
-                  {Object.entries(contributionPercentages).map(([model, pct]) => (
-                    <div key={model} className="rounded-lg border p-3" style={{ borderColor: "rgba(255,255,255,0.18)" }}>
-                      <p className="text-xs uppercase" style={{ color: "#c9b4fa" }}>{model}</p>
-                      <p className="mt-1 text-lg font-medium" style={{ color: "#ffffff" }}>{pct}%</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-10 flex items-center justify-between">
+              <div className="mt-10">
                 <button
                   type="button"
                   onClick={() => router.push("/assessment")}
@@ -346,22 +194,6 @@ export default function AssessmentResultInner() {
                   }}
                 >
                   New assessment
-                </button>
-                <button
-                  type="button"
-                  onClick={() => router.push("/history")}
-                  className="rounded-full px-6 py-3 text-base font-semibold transition-colors duration-150"
-                  style={{
-                    fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                    fontSize: "16px",
-                    fontWeight: 700,
-                    lineHeight: 1.0,
-                    letterSpacing: "0px",
-                    background: "#c9b4fa",
-                    color: "#1b1938",
-                  }}
-                >
-                  View history
                 </button>
               </div>
             </>

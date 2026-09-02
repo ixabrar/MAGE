@@ -23,15 +23,17 @@ export const metadata: Metadata = {
     "A scalable multimodal biological-age estimation framework combining facial, dorsal-hand, and blood-derived signals through a modality-aware fusion layer.",
 };
 
+import { Providers } from "./providers";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${rajdhani.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        {children}
+    <html lang="en" className={`${inter.variable} ${rajdhani.variable} h-full bg-black text-white antialiased`}>
+      <body className="min-h-full flex flex-col bg-black text-white" suppressHydrationWarning>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

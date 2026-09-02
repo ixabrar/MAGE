@@ -12,14 +12,41 @@
 
 # testing
 /coverage
+/coverage.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+
+# playwright / browser automation
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+playwright/.cache/
+**/playwright/.cache/
 
 # next.js
 /.next/
 frontend/.next/
 /out/
 
+.next
+
 # production
 /build
+dist/
+build/
+out/
+
+# virtual environments / editor files
+.venv/
+venv/
+.env/
+.env.local
+.idea/
+.vscode/
+*.code-workspace
 
 # misc
 .DS_Store
@@ -53,3 +80,7 @@ __pycache__/
 backend/uploads/
 uploads/
 
+# model checkpoints (large local artifacts)
+*.pth
+resnet18_consistent_age_best.pth
+backend/src/models/resnet18_consistent_age_best.pth

@@ -7,18 +7,26 @@ import io
 import os
 
 from core.supabase import supabase
-from schemas.patient import PatientCreate, PatientUpdate, PatientResponse, PatientHistoryRecord, PatientHistoryRecordCreate, BioAgePredictionRequest
+from schemas.patient import (
+    PatientCreate,
+    PatientUpdate,
+    PatientResponse,
+    PatientHistoryRecord,
+    PatientHistoryRecordCreate,
+    BioAgePredictionRequest
+)
 from services.bio_age_service import predict_bio_age_and_explain
 from services.pdf_service import generate_bio_age_pdf
 from services.llm_service import generate_health_recommendations
 from services.email_service import send_report_email
 
-router = APIRouter(prefix="/api/patients", tags=["patients"])
+from middleware.auth import get_current_doctor_id
 
 
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
-security = HTTPBearer(auto_error=False)
+router = APIRouter(
+    prefix="/api/patients",
+    tags=["patients"]
+)
 
 def get_current_doctor_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     if not credentials or credentials.credentials == "test":

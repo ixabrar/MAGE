@@ -1,37 +1,19 @@
-// TEMP DEV BYPASS — AUTH DISABLED
-// TODO: RESTORE AUTH BEFORE PRODUCTION
-const DEV_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
-
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import OrganizationsClient from "./OrganizationsClient";
 
-export default async function DashboardOrganizationsPage() {
+const DEV_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+
+export default async function OrganizationsPage() {
   let session;
-if (DEV_BYPASS) {
-  session = { user: { id: "dev_user", email: "mage.dev@example.com", name: "MAGE Development User", role: "user" } };
-} else {
-  session = await auth();
-}
-  if (!session?.user) redirect("/login");
-
-  return (
-    
-      <div className="space-y-6">
-        <h1
-          style={{
-            fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
-            fontSize: "40px",
-            fontWeight: 700,
-            lineHeight: 1.1,
-            color: "#ffffff",
-          }}
-        >
-          Organizations
-        </h1>
-        <p style={{ fontSize: "15px", lineHeight: 1.6, color: "#bcbac9" }}>
-          Manage organizations and platform-level settings.
-        </p>
-      </div>
-    
-  );
+  if (DEV_BYPASS) {
+    session = { user: { id: "dev_user", email: "mage.dev@example.com", name: "Admin Demo", role: "system_admin" } };
+  } else {
+    session = await auth();
+  }
+  if (!session?.user) redirect("/auth/signin");
+  const role = (session.user as any).role as string;
+  if (role === "doctor" || role === "clinician") redirect("/dashboard/patients");
+  if (role === "user") redirect("/");
+  return <OrganizationsClient />;
 }

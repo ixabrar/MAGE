@@ -36,6 +36,10 @@ def run_assessment(request: AssessmentRequest) -> Dict:
     errors: Dict[str, str] = {}
 
     for modality in request.modalities:
+        if modality == "blood":
+            # Blood is handled outside the fusion layer.
+            continue
+
         adapter = ADAPTER_MAP.get(modality)
         if adapter is None:
             errors[modality] = f"Unsupported modality: {modality}"
