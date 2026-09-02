@@ -14,6 +14,7 @@ def generate_health_recommendations(factors: list) -> str:
     if not factors:
         return ""
         
+    # Format the factors for the prompt
     factor_lines = []
     for f in factors:
         name = f.get("feature", "Unknown")
@@ -40,7 +41,6 @@ Keep the tone professional and encouraging.
     try:
         client = genai.Client(api_key=api_key)
         
-        # Updated to active model target
         response = client.models.generate_content(
             model="gemini-3.6-flash",
             contents=prompt,

@@ -8,6 +8,7 @@ class PatientBase(BaseModel):
     last_name: str
     date_of_birth: date
     gender: str
+    email: Optional[str] = None
     contact_number: Optional[str] = None
 
 class PatientCreate(PatientBase):
