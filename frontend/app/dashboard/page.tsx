@@ -14,6 +14,8 @@ const recent = [
 
 export default function DashboardIndexClient() {
   const { data: session } = useSession();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [filter, setFilter] = useState("all");
   const [stats, setStats] = useState([
     { label: "Assessments", value: "—" },
@@ -66,14 +68,15 @@ export default function DashboardIndexClient() {
 
   const filtered = filter === "all" ? recent : recent.filter((item) => item.status.toLowerCase() === filter);
 
-  const roleNow = (session?.user as any)?.role || getStoredUser()?.role || "user";
-  const isDoctor = roleNow === "doctor" || roleNow === "clinician";
-  const isAdmin = roleNow === "admin" || roleNow === "system_admin" || roleNow === "organization_admin";
+  const roleNow = mounted ? ((session?.user as any)?.role || getStoredUser()?.role || "user") : "user";
+  const isDoctor = mounted && (roleNow === "doctor" || roleNow === "clinician");
+  const isAdmin = mounted && (roleNow === "admin" || roleNow === "system_admin" || roleNow === "organization_admin");
 
   return (
     <div className="space-y-8">
       <div>
         <h1
+          suppressHydrationWarning
           style={{
             fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
             fontSize: "40px",
@@ -82,13 +85,15 @@ export default function DashboardIndexClient() {
             color: "#ffffff",
           }}
         >
-          {isDoctor ? "Doctor Dashboard" : isAdmin ? "Admin Dashboard" : "Dashboard"}
+          {mounted ? (isDoctor ? "Doctor Dashboard" : isAdmin ? "Admin Dashboard" : "Dashboard") : "Dashboard"}
         </h1>
-        <p style={{ color: "#bcbac9", fontSize: "14px", marginTop: "6px" }}>
-          {isDoctor
-            ? "Manage patients, review bio-age gaps, upload reports, and track history — isolated to your assigned patients."
-            : isAdmin
-            ? "System overview — doctors, anonymized patient counts, audit logs, and model registry. No raw biometric data exposed."
+        <p suppressHydrationWarning style={{ color: "#bcbac9", fontSize: "14px", marginTop: "6px" }}>
+          {mounted
+            ? isDoctor
+              ? "Manage patients, review bio-age gaps, upload reports, and track history — isolated to your assigned patients."
+              : isAdmin
+              ? "System overview — doctors, anonymized patient counts, audit logs, and model registry. No raw biometric data exposed."
+              : "Overview"
             : "Overview"}
         </p>
       </div>

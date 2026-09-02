@@ -292,17 +292,6 @@ function AuthSignInInner() {
                 </p>
               )}
 
-              <div className="rounded-md border px-3 py-2 text-xs" style={{ borderColor: "#3f3a52", background: "rgba(201,180,250,0.06)", color: "#bcbac9" }}>
-                <p style={{ fontWeight: 600, color: "#c9b4fa" }}>Demo logins (no backend needed):</p>
-                {(!requestedRole || requestedRole === "doctor") && (
-                  <p style={{ marginTop: "4px" }}>Doctor: <span style={{ color: "#fff" }}>doctor@mage.health</span> / <span style={{ color: "#fff" }}>doctor123</span></p>
-                )}
-                {(!requestedRole || requestedRole === "admin") && (
-                  <p>Admin: <span style={{ color: "#fff" }}>admin@mage.health</span> / <span style={{ color: "#fff" }}>admin123</span></p>
-                )}
-                {requestedRole && <p style={{ fontSize: "11px", color: "#5a5772", marginTop: "4px" }}>You’re on the {requestedRole} login — the other role will be rejected here.</p>}
-              </div>
-
               <button
                 type="submit"
                 disabled={loading}
