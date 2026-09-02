@@ -31,6 +31,8 @@ playwright/.cache/
 frontend/.next/
 /out/
 
+.next
+
 # production
 /build
 
@@ -66,3 +68,7 @@ __pycache__/
 backend/uploads/
 uploads/
 
+# model checkpoints (large local artifacts)
+*.pth
+resnet18_consistent_age_best.pth
+backend/src/models/resnet18_consistent_age_best.pth
