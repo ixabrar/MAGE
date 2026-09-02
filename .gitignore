@@ -12,6 +12,19 @@
 
 # testing
 /coverage
+/coverage.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+
+# playwright / browser automation
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+playwright/.cache/
+**/playwright/.cache/
 
 # next.js
 /.next/
