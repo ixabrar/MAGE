@@ -23,12 +23,14 @@
 
 html {
   scroll-behavior: smooth;
+  background-color: #000000;
+  color: #ffffff;
 }
 
 body {
   font-family: var(--font-sans);
-  color: var(--color-ink);
-  background-color: var(--color-canvas);
+  color: #ffffff;
+  background-color: #000000;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
