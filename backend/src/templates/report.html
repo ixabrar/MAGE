@@ -151,6 +151,15 @@
                     {% endfor %}
                 </tbody>
             </table>
+            
+            {% if recommendations %}
+            <div style="margin-top: 30px; background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <h3 style="color: #0f172a; margin-top: 0; font-size: 16px;">Personalized Action Plan (AI Generated)</h3>
+                <div style="color: #334155; font-size: 14px; line-height: 1.6;">
+                    {{ recommendations | safe }}
+                </div>
+            </div>
+            {% endif %}
         {% else %}
             <h2>Health Status Excellent</h2>
             <p>Congratulations! Your biological age is lower than or equal to your chronological age, indicating excellent overall health and metabolic function based on the provided biomarkers.</p>

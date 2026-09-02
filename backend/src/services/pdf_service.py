@@ -26,7 +26,8 @@ def generate_bio_age_pdf(patient_id: str, analysis_results: dict) -> bytes:
         predicted_bio_age=analysis_results["predicted_bio_age"],
         bio_age_gap=analysis_results["bio_age_gap"],
         top_contributing_factors=factors,
-        max_impact=max_impact
+        max_impact=max_impact,
+        recommendations=analysis_results.get("recommendations", "")
     )
     
     pdf_bytes = HTML(string=html_content).write_pdf()
