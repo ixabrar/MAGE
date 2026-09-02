@@ -93,7 +93,7 @@ function AuthSignInInner() {
       role = role || "user";
       // Enforce requested role if ?role=doctor|admin was in URL
       if (requestedRole === "doctor" && role !== "doctor" && role !== "clinician") {
-        setError(`This login is for doctors. Your account role is "${role}". Please use a doctor account.`);
+        setError(`This login is for doctors. Your account role is "${role}". Try doctor@mage.health / doctor123`);
         // sign out the mismatched session so user can retry
         try { await fetch("/api/auth/signout", { method: "POST" }); } catch {}
         try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_user"); } catch {}
@@ -101,7 +101,7 @@ function AuthSignInInner() {
         return;
       }
       if (requestedRole === "admin" && role !== "admin" && role !== "system_admin" && role !== "organization_admin") {
-        setError(`This login is for admins. Your account role is "${role}". Please use an admin account.`);
+        setError(`This login is for admins. Your account role is "${role}". Try admin@mage.health / admin123`);
         try { await fetch("/api/auth/signout", { method: "POST" }); } catch {}
         try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_user"); } catch {}
         setLoading(false);

@@ -396,7 +396,7 @@ function AssessmentUploadInner() {
 
 export default function AssessmentUploadPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-sm text-[#bcbac9]">Loading upload step…</div>}>
+    <Suspense fallback={<div className="mt-16 text-sm" style={{ color: "#bcbac9" }}>Loading upload step…</div>}>
       <AssessmentUploadInner />
     </Suspense>
   );
