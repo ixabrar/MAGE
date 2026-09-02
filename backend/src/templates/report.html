@@ -1,174 +1,595 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <title>Biological Age Report</title>
+    <title>Biological Age Analysis Report</title>
     <style>
+        @page {
+            size: A4;
+            margin: 22mm 18mm;
+        }
+
+        :root {
+            --ink: #172428;
+            --ink-soft: #4B5B60;
+            --ink-faint: #86959A;
+            --teal: #0E5C63;
+            --teal-deep: #0A4247;
+            --hairline: #D8E0DE;
+            --panel: #F5F8F7;
+            --panel-edge: #E3EAE8;
+            --risk: #9A3B2E;
+            --risk-bg: #FBF0EE;
+            --good: #2F6A4C;
+            --good-bg: #EFF6F1;
+            --amber: #A9762C;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            color: #333;
-            line-height: 1.6;
-            margin: 40px;
-        }
-        .header {
-            text-align: center;
-            border-bottom: 2px solid #2563eb;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            color: #2563eb;
+            font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+            color: var(--ink);
+            font-size: 13.5px;
+            line-height: 1.55;
             margin: 0;
-            font-size: 28px;
+            -webkit-font-smoothing: antialiased;
         }
-        .summary-box {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 30px;
+
+        h1,
+        h2,
+        h3 {
+            font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+            font-weight: 600;
+            color: var(--teal-deep);
+            margin: 0;
         }
-        .summary-box h2 {
-            margin-top: 0;
-            font-size: 20px;
-            color: #1e40af;
-        }
-        .metrics {
+
+        /* ---------- Letterhead ---------- */
+
+        .letterhead {
             display: flex;
             justify-content: space-between;
-            margin-top: 20px;
+            align-items: flex-end;
+            border-bottom: 2.5px solid var(--teal-deep);
+            padding-bottom: 14px;
+            margin-bottom: 4px;
         }
+
+        .letterhead .brand {
+            font-family: "Source Serif 4", Georgia, serif;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--teal-deep);
+            letter-spacing: 0.02em;
+        }
+
+        .letterhead .brand span {
+            display: block;
+            font-family: "Inter", sans-serif;
+            font-weight: 400;
+            font-size: 10px;
+            color: var(--ink-faint);
+            letter-spacing: 0.08em;
+            margin-top: 2px;
+        }
+
+        .letterhead .doc-meta {
+            text-align: right;
+            font-size: 10.5px;
+            color: var(--ink-soft);
+        }
+
+        .letterhead .doc-meta strong {
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        .report-title {
+            margin: 26px 0 4px 0;
+            font-size: 25px;
+        }
+
+        .report-subtitle {
+            color: var(--ink-soft);
+            font-size: 12.5px;
+            margin-bottom: 22px;
+        }
+
+        /* ---------- Patient bar ---------- */
+
+        .patient-bar {
+            display: flex;
+            border: 1px solid var(--panel-edge);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 28px;
+        }
+
+        .patient-bar .field {
+            flex: 1;
+            padding: 10px 16px;
+            border-right: 1px solid var(--panel-edge);
+            background: var(--panel);
+        }
+
+        .patient-bar .field:last-child {
+            border-right: none;
+        }
+
+        .patient-bar .field-label {
+            font-size: 9.5px;
+            color: var(--ink-faint);
+            letter-spacing: 0.05em;
+            margin-bottom: 3px;
+        }
+
+        .patient-bar .field-value {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        /* ---------- Age summary ---------- */
+
+        .summary {
+            border: 1px solid var(--panel-edge);
+            border-radius: 4px;
+            padding: 26px 28px 24px 28px;
+            margin-bottom: 32px;
+        }
+
+        .summary h2 {
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+
+        .summary .lede {
+            color: var(--ink-soft);
+            font-size: 12px;
+            margin-bottom: 22px;
+        }
+
+        .metrics {
+            display: flex;
+            align-items: stretch;
+        }
+
         .metric {
+            flex: 0 0 auto;
             text-align: center;
+            padding: 0 22px;
         }
+
         .metric-value {
-            font-size: 32px;
-            font-weight: bold;
-            color: #2563eb;
+            font-family: "Source Serif 4", Georgia, serif;
+            font-variant-numeric: tabular-nums;
+            font-size: 36px;
+            font-weight: 600;
+            color: var(--ink);
+            line-height: 1;
         }
+
         .metric-label {
-            font-size: 14px;
-            color: #64748b;
-            text-transform: uppercase;
+            font-size: 10px;
+            color: var(--ink-faint);
+            letter-spacing: 0.05em;
+            margin-top: 6px;
         }
-        .gap-positive {
-            color: #dc2626; /* Red for bad gap */
+
+        .metric-divider {
+            width: 1px;
+            background: var(--hairline);
+            margin: 4px 0;
         }
-        .gap-negative {
-            color: #16a34a; /* Green for good gap */
+
+        .gap-value.gap-positive {
+            color: var(--risk);
         }
-        .factors-section {
-            margin-top: 30px;
+
+        .gap-value.gap-negative {
+            color: var(--good);
         }
+
+        .gap-pill {
+            display: inline-block;
+            font-size: 9.5px;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: 8px;
+        }
+
+        .gap-pill.gap-positive {
+            color: var(--risk);
+            background: var(--risk-bg);
+        }
+
+        .gap-pill.gap-negative {
+            color: var(--good);
+            background: var(--good-bg);
+        }
+
+        /* age continuum bar */
+        .continuum {
+            margin-top: 26px;
+            padding-top: 22px;
+            border-top: 1px solid var(--hairline);
+        }
+
+        .continuum-label {
+            font-size: 10px;
+            color: var(--ink-faint);
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
+        }
+
+        .continuum-track {
+            position: relative;
+            height: 6px;
+            background: var(--panel-edge);
+            border-radius: 3px;
+        }
+
+        .continuum-marker {
+            position: absolute;
+            top: -5px;
+            width: 2px;
+            height: 16px;
+            background: var(--ink);
+        }
+
+        .continuum-marker.bio {
+            background: var(--teal);
+            width: 3px;
+        }
+
+        .continuum-tag {
+            position: absolute;
+            top: -24px;
+            transform: translateX(-50%);
+            font-size: 9.5px;
+            font-weight: 600;
+            color: var(--ink-soft);
+            white-space: nowrap;
+        }
+
+        .continuum-tag.bio {
+            color: var(--teal);
+        }
+
+        /* ---------- Factors ---------- */
+
+        .factors-section h2 {
+            font-size: 15px;
+            margin-bottom: 6px;
+        }
+
+        .factors-section>p {
+            color: var(--ink-soft);
+            font-size: 12px;
+            max-width: 62ch;
+            margin-bottom: 18px;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 15px;
-            page-break-inside: auto;
         }
-        tr {
-            page-break-inside: avoid;
-            page-break-after: auto;
-        }
-        th, td {
+
+        thead th {
             text-align: left;
-            padding: 12px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        th {
-            background-color: #f1f5f9;
-            color: #475569;
+            font-size: 10px;
+            letter-spacing: 0.04em;
+            color: var(--ink-faint);
             font-weight: 600;
+            padding: 0 12px 8px 12px;
+            border-bottom: 1.5px solid var(--ink);
         }
-        .impact-bar {
-            background-color: #fee2e2;
-            height: 20px;
-            border-radius: 4px;
-            display: inline-block;
+
+        thead th.num,
+        tbody td.num {
+            text-align: right;
         }
+
+        tbody tr {
+            border-bottom: 1px solid var(--hairline);
+            page-break-inside: avoid;
+        }
+
+        tbody td {
+            padding: 12px;
+            vertical-align: middle;
+            font-size: 12.5px;
+        }
+
+        tbody td.feature {
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        tbody td.value {
+            font-variant-numeric: tabular-nums;
+            color: var(--ink-soft);
+        }
+
+        td.impact-cell {
+            width: 34%;
+        }
+
+        .impact-row {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .impact-number {
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+            color: var(--risk);
+            font-size: 12.5px;
+            min-width: 48px;
+            text-align: right;
+        }
+
+        .impact-track {
+            flex: 1;
+            height: 5px;
+            background: var(--panel);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .impact-fill {
+            height: 100%;
+            background: var(--risk);
+            border-radius: 3px;
+        }
+
+        /* ---------- Action plan ---------- */
+
+        .action-plan {
+            margin-top: 30px;
+            border: 1px solid var(--panel-edge);
+            border-left: 3px solid var(--teal);
+            background: var(--panel);
+            border-radius: 0 3px 3px 0;
+            padding: 20px 24px;
+        }
+
+        .action-plan h3 {
+            font-size: 13.5px;
+            color: var(--teal-deep);
+            margin-bottom: 2px;
+        }
+
+        .action-plan .tag {
+            font-size: 9.5px;
+            color: var(--ink-faint);
+            letter-spacing: 0.04em;
+            margin-bottom: 12px;
+        }
+
+        .action-plan .body-copy {
+            color: var(--ink);
+            font-size: 12.5px;
+            line-height: 1.65;
+        }
+
+        .action-plan .body-copy p {
+            margin: 0 0 10px 0;
+        }
+
+        .action-plan .body-copy ul {
+            margin: 0 0 10px 0;
+            padding-left: 18px;
+        }
+
+        /* ---------- Healthy status ---------- */
+
+        .status-good {
+            border: 1px solid var(--good-bg);
+            background: var(--good-bg);
+            border-left: 3px solid var(--good);
+            border-radius: 0 3px 3px 0;
+            padding: 22px 26px;
+        }
+
+        .status-good h2 {
+            color: var(--good);
+            font-size: 15px;
+            margin-bottom: 8px;
+        }
+
+        .status-good p {
+            color: var(--ink);
+            font-size: 12.5px;
+            margin: 0;
+            max-width: 62ch;
+        }
+
+        /* ---------- Footer ---------- */
+
         .footer {
-            margin-top: 50px;
-            text-align: center;
+            margin-top: 48px;
+            padding-top: 16px;
+            border-top: 1px solid var(--hairline);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .footer .disclaimer {
+            font-size: 9.5px;
+            color: var(--ink-faint);
+            max-width: 60ch;
+            line-height: 1.5;
+        }
+
+        .footer .signoff {
+            text-align: right;
+            font-size: 10px;
+            color: var(--ink-faint);
+        }
+
+        .footer .signoff strong {
+            display: block;
+            font-family: "Source Serif 4", Georgia, serif;
+            color: var(--ink-soft);
             font-size: 12px;
-            color: #94a3b8;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 20px;
+            margin-bottom: 2px;
         }
     </style>
 </head>
+
 <body>
 
-    <div class="header">
-        <h1>Biological Age Analysis Report</h1>
-        <p>Patient ID: {{ patient_id }} | Date: {{ date }}</p>
+    <div class="letterhead">
+        <div class="brand">
+            MAGE Healthcare AI
+            <span>LONGEVITY &amp; BIOMARKER DIAGNOSTICS</span>
+        </div>
+        <div class="doc-meta">
+            Report ID: <strong>{{ patient_id }}</strong><br>
+            Issued: <strong>{{ date }}</strong>
+        </div>
     </div>
 
-    <div class="summary-box">
+    <h1 class="report-title">Biological Age Analysis</h1>
+    <p class="report-subtitle">Predictive biomarker model &middot; SHAP-based feature attribution</p>
+
+    <div class="patient-bar">
+        <div class="field">
+            <div class="field-label">PATIENT ID</div>
+            <div class="field-value">{{ patient_id }}</div>
+        </div>
+        <div class="field">
+            <div class="field-label">REPORT DATE</div>
+            <div class="field-value">{{ date }}</div>
+        </div>
+        <div class="field">
+            <div class="field-label">CHRONOLOGICAL AGE</div>
+            <div class="field-value">{{ "%.1f"|format(chronological_age) }} yrs</div>
+        </div>
+        <div class="field">
+            <div class="field-label">MODEL OUTPUT</div>
+            <div class="field-value">{% if bio_age_gap > 0 %}Elevated{% else %}Within range{% endif %}</div>
+        </div>
+    </div>
+
+    <div class="summary">
         <h2>Age Summary</h2>
+        <p class="lede">Comparison of chronological age against the model&rsquo;s predicted biological age, derived from
+            submitted biomarker panel.</p>
+
         <div class="metrics">
             <div class="metric">
                 <div class="metric-value">{{ "%.1f"|format(chronological_age) }}</div>
-                <div class="metric-label">Chronological Age</div>
+                <div class="metric-label">CHRONOLOGICAL AGE</div>
             </div>
+
+            <div class="metric-divider"></div>
+
             <div class="metric">
                 <div class="metric-value">{{ "%.1f"|format(predicted_bio_age) }}</div>
-                <div class="metric-label">Biological Age</div>
+                <div class="metric-label">BIOLOGICAL AGE</div>
             </div>
+
+            <div class="metric-divider"></div>
+
             <div class="metric">
-                <div class="metric-value {% if bio_age_gap > 0 %}gap-positive{% else %}gap-negative{% endif %}">
+                <div
+                    class="metric-value gap-value {% if bio_age_gap > 0 %}gap-positive{% else %}gap-negative{% endif %}">
                     {% if bio_age_gap > 0 %}+{% endif %}{{ "%.1f"|format(bio_age_gap) }}
                 </div>
-                <div class="metric-label">Age Gap (Years)</div>
+                <div class="metric-label">AGE GAP (YEARS)</div>
+                <div class="gap-pill {% if bio_age_gap > 0 %}gap-positive{% else %}gap-negative{% endif %}">
+                    {% if bio_age_gap > 0 %}ABOVE EXPECTED{% else %}AT OR BELOW EXPECTED{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="continuum">
+            <div class="continuum-label">AGE POSITION &middot; &plusmn;15 YEAR WINDOW</div>
+            <div class="continuum-track">
+                <div class="continuum-tag" style="left: 50%;">Chron. {{ "%.1f"|format(chronological_age) }}</div>
+                <div class="continuum-marker" style="left: 50%;"></div>
+
+                {% set bio_position = 50 + ((predicted_bio_age - chronological_age) / 15 * 50) %}
+                <div class="continuum-tag bio" style="left: {{ bio_position }}%;">Bio. {{
+                    "%.1f"|format(predicted_bio_age) }}</div>
+                <div class="continuum-marker bio" style="left: {{ bio_position }}%;"></div>
             </div>
         </div>
     </div>
 
     <div class="factors-section">
         {% if bio_age_gap > 0 %}
-            <h2>Key Contributing Factors</h2>
-            <p>Your biological age is higher than your chronological age. The machine learning model (SHAP analysis) has identified the following primary factors contributing to this increase:</p>
-            
-            <table>
-                <thead>
-                    <tr>
-                        <th>Biomarker / Feature</th>
-                        <th>Patient Value</th>
-                        <th>Impact (Years Added)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for factor in top_contributing_factors %}
-                    <tr>
-                        <td><strong>{{ factor.feature }}</strong></td>
-                        <td>{{ "%.2f"|format(factor.value) }}</td>
-                        <td>
-                            +{{ "%.2f"|format(factor.impact) }} yrs
-                            <div style="margin-top: 5px; width: 100%;">
-                                <div class="impact-bar" style="width: {{ (factor.impact / max_impact) * 100 }}%;"></div>
+        <h2>Key Contributing Factors</h2>
+        <p>The predictive model has attributed the elevated biological age to the following biomarkers, ranked by
+            contribution using SHAP value analysis.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Biomarker / Feature</th>
+                    <th class="num">Patient Value</th>
+                    <th class="num">Impact</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for factor in top_contributing_factors %}
+                <tr>
+                    <td class="feature">{{ factor.feature }}</td>
+                    <td class="value num">{{ "%.2f"|format(factor.value) }}</td>
+                    <td class="impact-cell">
+                        <div class="impact-row">
+                            <div class="impact-track">
+                                <div class="impact-fill" style="width: {{ (factor.impact / max_impact) * 100 }}%;">
+                                </div>
                             </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            
-            {% if recommendations %}
-            <div style="margin-top: 30px; background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <h3 style="color: #0f172a; margin-top: 0; font-size: 16px;">Personalized Action Plan (AI Generated)</h3>
-                <div style="color: #334155; font-size: 14px; line-height: 1.6;">
-                    {{ recommendations | safe }}
-                </div>
-            </div>
-            {% endif %}
+                            <div class="impact-number">+{{ "%.2f"|format(factor.impact) }}y</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if recommendations %}
+        <div class="action-plan">
+            <h3>Personalized Action Plan</h3>
+            <div class="tag">AI-GENERATED &middot; FOR CLINICIAN REVIEW</div>
+            <div class="body-copy">{{ recommendations | safe }}</div>
+        </div>
+        {% endif %}
+
         {% else %}
-            <h2>Health Status Excellent</h2>
-            <p>Congratulations! Your biological age is lower than or equal to your chronological age, indicating excellent overall health and metabolic function based on the provided biomarkers.</p>
+        <div class="status-good">
+            <h2>Biomarker Profile Within Expected Range</h2>
+            <p>The model&rsquo;s biological age estimate is at or below chronological age, consistent with favorable
+                metabolic and physiological function across the biomarker panel submitted for this analysis.</p>
+        </div>
         {% endif %}
     </div>
 
     <div class="footer">
-        <p>Generated by MAGE Healthcare AI. This report is for informational purposes only and should be reviewed by a qualified medical professional.</p>
+        <div class="disclaimer">
+            Generated by MAGE Healthcare AI using a predictive biomarker model. This report is intended for
+            informational purposes only, does not constitute a medical diagnosis, and should be reviewed and interpreted
+            by a qualified physician alongside the patient&rsquo;s full clinical history.
+        </div>
+        <div class="signoff">
+            <strong>MAGE Healthcare AI</strong>
+            Report generated {{ date }}
+        </div>
     </div>
 
 </body>
+
 </html>
