@@ -116,6 +116,45 @@ export default function AssessmentResultInner() {
           const data = await response.json();
           setResult(data);
           setLoading(false);
+
+          // Save to user history audit log (read-only historical record)
+          try {
+            const HISTORY_STORE_KEY = "mage:user-assessment-history";
+            const existingRaw = localStorage.getItem(HISTORY_STORE_KEY);
+            const historyList: any[] = existingRaw ? JSON.parse(existingRaw) : [];
+            const alreadyLogged = historyList.some((item) => item.id === assessmentId);
+            if (!alreadyLogged) {
+              const newEntry = {
+                id: assessmentId,
+                date: new Date().toISOString(),
+                predicted_age: data.result?.fused_predicted_age,
+                confidence: data.result?.fused_confidence,
+                modalities: Object.keys(data.result?.model_contributions || {}),
+              };
+              localStorage.setItem(HISTORY_STORE_KEY, JSON.stringify([newEntry, ...historyList].slice(0, 50)));
+            }
+          } catch {}
+
+          // Only attach dorsal hand explanation if this assessment actually evaluated dorsal hand
+          const hasDorsalHand = Boolean(
+            data.result?.model_contributions?.["dorsal"] ||
+            data.result?.model_contributions?.["dorsal_hand"]
+          );
+
+          if (hasDorsalHand) {
+            const storedExplanation = sessionStorage.getItem("mage:dorsal-explanation");
+            if (storedExplanation) {
+              try {
+                const explanation = JSON.parse(storedExplanation);
+                setDorsalExplanation(explanation);
+              } catch {}
+              // Clean up once consumed for this assessment
+              sessionStorage.removeItem("mage:dorsal-explanation");
+            }
+          } else {
+            setDorsalExplanation(null);
+            sessionStorage.removeItem("mage:dorsal-explanation");
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -126,44 +165,6 @@ export default function AssessmentResultInner() {
     }
 
     loadAssessment();
-
-    const storedExplanation = sessionStorage.getItem("mage:dorsal-explanation");
-    if (storedExplanation) {
-      try {
-        const explanation = JSON.parse(storedExplanation);
-        setDorsalExplanation(explanation);
-        const storedTracking = localStorage.getItem(DEMO_TRACKING_KEY);
-        if (storedTracking) {
-          const history = JSON.parse(storedTracking) as DemoDorsalHistory;
-          if (history.tracking_enabled && !history.predictions.some((point) => point.id === assessmentId)) {
-            const nextPoint = {
-              id: assessmentId,
-              predicted_at: new Date().toISOString(),
-              predicted_age: explanation.predicted_age,
-              confidence: explanation.confidence,
-              age_bins: explanation.age_bins,
-              is_baseline: false,
-            };
-            const predictions = [...history.predictions, nextPoint];
-            const latest = predictions[predictions.length - 1];
-            const nextHistory = {
-              ...history,
-              predictions,
-              latest_predicted_age: latest.predicted_age,
-              change_from_baseline:
-                history.baseline_predicted_age == null
-                  ? null
-                  : Number((latest.predicted_age - history.baseline_predicted_age).toFixed(1)),
-            };
-            localStorage.setItem(DEMO_TRACKING_KEY, JSON.stringify(nextHistory));
-            setDorsalHistory(nextHistory);
-            setTrackingPrompt(false);
-          }
-        }
-      } catch {
-        sessionStorage.removeItem("mage:dorsal-explanation");
-      }
-    }
 
     return () => {
       cancelled = true;

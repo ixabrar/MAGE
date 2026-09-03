@@ -1,68 +1,76 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
-// TEMP DEV BYPASS — AUTH DISABLED FOR DEVELOPMENT
-// TODO: RESTORE AUTH BEFORE PRODUCTION
-const DEV_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
-
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const sessionUser = (req.auth as any)?.user;
-  const role: string | undefined = sessionUser?.role || (req.auth as any)?.role;
+  const role: string = sessionUser?.role || (req.auth as any)?.role || "user";
   const pathname = req.nextUrl.pathname;
-  const isOnDashboard = pathname.startsWith("/dashboard");
-  const isOnAssessment = pathname.startsWith("/assessment");
-  const isOnHistory = pathname.startsWith("/history");
-  const isOnPrivacy = pathname.startsWith("/privacy");
-  const isOnAuth = pathname.startsWith("/auth") || pathname.startsWith("/login");
 
   const isDoctorRole = role === "doctor" || role === "clinician";
   const isAdminRole = role === "admin" || role === "system_admin" || role === "organization_admin";
-  const isUserRole = !isDoctorRole && !isAdminRole && isLoggedIn; // general user with login shouldn't have dashboard
 
-  if (DEV_BYPASS) {
-    if ((isOnDashboard || isOnAssessment || isOnHistory || isOnPrivacy) && !isLoggedIn) {
-      return NextResponse.next();
-    }
-    if (isOnAuth && isLoggedIn) {
-      // role-aware redirect for dev bypass
-      if (isDoctorRole) return NextResponse.redirect(new URL("/dashboard/patients", req.nextUrl));
-      if (isAdminRole) return NextResponse.redirect(new URL("/dashboard/users", req.nextUrl));
-      return NextResponse.redirect(new URL("/", req.nextUrl));
-    }
-    return NextResponse.next();
-  }
+  const isOnDashboard = pathname.startsWith("/dashboard");
+  const isOnAuth = pathname.startsWith("/auth") || pathname.startsWith("/login");
 
-  // Public routes: landing, assessment, fusion, terms, privacy are allowed without login
-  // Only dashboard requires auth
+  // 1. Strict Dashboard Protection
   if (isOnDashboard) {
     if (!isLoggedIn) {
-      return NextResponse.redirect(new URL("/auth/signin", req.nextUrl));
+      const signInUrl = new URL("/auth/signin", req.nextUrl);
+      signInUrl.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(signInUrl);
     }
-    // User (general) has no dashboard — send to landing
-    if (isUserRole) {
+
+    // Standard public users have no dashboard access — send to landing
+    if (!isDoctorRole && !isAdminRole) {
       return NextResponse.redirect(new URL("/", req.nextUrl));
     }
-    const isDoctorPath = pathname.startsWith("/dashboard/patients") || pathname.startsWith("/dashboard/assessments");
-    const isAdminPath =
+
+    // Route root /dashboard to designated role portal
+    if (pathname === "/dashboard" || pathname === "/dashboard/") {
+      if (isDoctorRole) {
+        return NextResponse.redirect(new URL("/dashboard/patients", req.nextUrl));
+      }
+      if (isAdminRole) {
+        return NextResponse.redirect(new URL("/dashboard/users", req.nextUrl));
+      }
+    }
+
+    // Role-based boundary enforcement
+    const isDoctorOnlyPath =
+      pathname.startsWith("/dashboard/patients") ||
+      pathname.startsWith("/dashboard/assessments") ||
+      pathname.startsWith("/dashboard/history");
+
+    const isAdminOnlyPath =
       pathname.startsWith("/dashboard/users") ||
       pathname.startsWith("/dashboard/organizations") ||
       pathname.startsWith("/dashboard/organization") ||
       pathname.startsWith("/dashboard/audit") ||
       pathname.startsWith("/dashboard/models") ||
-      pathname.startsWith("/dashboard/analytics");
-    if (isDoctorPath && isAdminRole && !isDoctorRole) {
-      return NextResponse.redirect(new URL("/dashboard/users", req.nextUrl));
-    }
-    if (isAdminPath && isDoctorRole && !isAdminRole) {
+      pathname.startsWith("/dashboard/analytics") ||
+      pathname.startsWith("/dashboard/datasets") ||
+      pathname.startsWith("/dashboard/experiments");
+
+    // Doctor trying to access Admin pages -> redirect to Doctor portal
+    if (isAdminOnlyPath && isDoctorRole && !isAdminRole) {
       return NextResponse.redirect(new URL("/dashboard/patients", req.nextUrl));
+    }
+
+    // Admin trying to access Doctor patient records -> redirect to Admin console
+    if (isDoctorOnlyPath && isAdminRole && !isDoctorRole) {
+      return NextResponse.redirect(new URL("/dashboard/users", req.nextUrl));
     }
   }
 
-  if ((isOnAuth || pathname === "/login") && isLoggedIn) {
-    if (isDoctorRole) return NextResponse.redirect(new URL("/dashboard/patients", req.nextUrl));
-    if (isAdminRole) return NextResponse.redirect(new URL("/dashboard/users", req.nextUrl));
-    // general user logged in unexpectedly — send to home
+  // 2. Prevent logged-in users from lingering on auth pages
+  if (isOnAuth && isLoggedIn) {
+    if (isDoctorRole) {
+      return NextResponse.redirect(new URL("/dashboard/patients", req.nextUrl));
+    }
+    if (isAdminRole) {
+      return NextResponse.redirect(new URL("/dashboard/users", req.nextUrl));
+    }
     return NextResponse.redirect(new URL("/", req.nextUrl));
   }
 
