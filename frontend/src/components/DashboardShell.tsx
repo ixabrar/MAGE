@@ -30,9 +30,10 @@ export function DashboardShell({ user, children }: { user: { id?: string; name?:
     return pathname.startsWith(href);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     try { localStorage.removeItem("mage_access_token"); localStorage.removeItem("mage_refresh_token"); localStorage.removeItem("mage_user"); } catch {}
-    signOut({ callbackUrl: "/login" });
+    await signOut({ redirect: false });
+    window.location.replace("/auth/signin");
   };
 
   return (
