@@ -76,16 +76,34 @@ export default function DorsalHandExplainability({
 
       {/* Grad-CAM side-by-side if available */}
       {gradcamDataUrl && (
-        <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-white/5 bg-black/40 p-3">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-xl border border-white/10 bg-black/60 p-4">
           {originalImageDataUrl && (
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#8f8aa4] mb-1">Cropped ROI</p>
-              <img src={originalImageDataUrl} alt="Original Hand" className="h-32 w-full object-cover rounded border border-white/10" />
+            <div className="flex flex-col">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-[#8f8aa4] mb-1.5 flex items-center justify-between">
+                <span>Cropped ROI</span>
+                <span className="text-[10px] text-white/40">224 × 224</span>
+              </p>
+              <div className="relative aspect-square w-full overflow-hidden rounded-lg border border-white/10 bg-black/80 flex items-center justify-center">
+                <img
+                  src={originalImageDataUrl}
+                  alt="Original Hand"
+                  className="h-full w-full object-contain"
+                />
+              </div>
             </div>
           )}
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-[#c9b4fa] mb-1">Grad-CAM Heatmap</p>
-            <img src={gradcamDataUrl} alt="Grad-CAM Activation" className="h-32 w-full object-cover rounded border border-[#c9b4fa]/30" />
+          <div className="flex flex-col">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#c9b4fa] mb-1.5 flex items-center justify-between">
+              <span>Grad-CAM Activation Heatmap</span>
+              <span className="text-[10px] text-[#c9b4fa]/60">ResNet-18 Layer4</span>
+            </p>
+            <div className="relative aspect-square w-full overflow-hidden rounded-lg border border-[#c9b4fa]/30 bg-black/80 flex items-center justify-center">
+              <img
+                src={gradcamDataUrl}
+                alt="Grad-CAM Activation"
+                className="h-full w-full object-contain"
+              />
+            </div>
           </div>
         </div>
       )}
