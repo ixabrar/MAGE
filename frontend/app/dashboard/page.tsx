@@ -44,7 +44,7 @@ export default function DashboardIndexClient() {
                 const len = Array.isArray(j) ? j.length : j?.length ?? "—";
                 setStats((s) => s.map((x) => (x.label === "Patients" ? { ...x, value: String(len) } : x)));
               }
-            } catch {}
+            } catch { }
           }
         }
         if (role === "system_admin" || role === "admin") {
@@ -62,7 +62,7 @@ export default function DashboardIndexClient() {
         }
         // assessments: try to infer from local history? keep static for now
         setStats((s) => s.map((x) => (x.label === "Assessments" ? { ...x, value: recent.length.toString() } : x)));
-      } catch {}
+      } catch { }
     })();
   }, []);
 
@@ -92,8 +92,8 @@ export default function DashboardIndexClient() {
             ? isDoctor
               ? "Manage patients, review bio-age gaps, upload reports, and track history — isolated to your assigned patients."
               : isAdmin
-              ? "System overview — doctors, anonymized patient counts, audit logs, and model registry. No raw biometric data exposed."
-              : "Overview"
+                ? "System overview — doctors, anonymized patient counts, audit logs, and model registry. No raw biometric data exposed."
+                : "Overview"
             : "Overview"}
         </p>
       </div>

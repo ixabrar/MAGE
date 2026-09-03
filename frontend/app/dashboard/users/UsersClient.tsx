@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { listDoctors, createDoctor, deleteDoctor, enableDoctor, type Doctor } from "@/lib/api";
-import { listPatients } from "@/lib/api";
 
 export default function UsersClient() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -11,8 +10,7 @@ export default function UsersClient() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ full_name: "", email: "", password: "" });
   const [submitting, setSubmitting] = useState(false);
-  const [tab, setTab] = useState<"doctors" | "patients" | "roles">("doctors");
-  const [patientsCount, setPatientsCount] = useState<string>("—");
+  const [tab, setTab] = useState<"doctors" | "roles">("doctors");
 
   async function load() {
     setLoading(true);
@@ -26,15 +24,6 @@ export default function UsersClient() {
         return j as { doctors: Doctor[] };
       });
       setDoctors(res.doctors || []);
-      try {
-        const base = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-        const r = await fetch(`${base}/api/patients/`);
-        if (r.ok) {
-          const j = await r.json();
-          const len = Array.isArray(j) ? j.length : j?.length ?? j?.patients?.length ?? "—";
-          setPatientsCount(String(len));
-        }
-      } catch {}
     } catch (e: any) {
       setError(e.message || "Load failed");
     } finally {
@@ -121,7 +110,6 @@ export default function UsersClient() {
       <div className="flex gap-2">
         {[
           { id: "doctors", label: `Doctors (${doctors.length})` },
-          { id: "patients", label: `Patients (${patientsCount})` },
           { id: "roles", label: "Roles" },
         ].map((t) => (
           <button
@@ -187,29 +175,6 @@ export default function UsersClient() {
               </table>
             </div>
           )}
-        </div>
-      )}
-
-      {tab === "patients" && (
-        <div className="rounded-xl border p-6" style={{ borderColor: "#3f3a52", background: "#000" }}>
-          <h3 className="text-sm uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>
-            Patients — anonymized overview (admin)
-          </h3>
-          <p style={{ color: "#5a5772", fontSize: "13px", marginTop: "6px" }}>Admin sees only counts & anonymized ages — no names, images, or report blobs. Doctors see full records for their assigned patients.</p>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <div className="rounded-lg border p-4" style={{ borderColor: "#3f3a52", background: "#0e0c1f" }}>
-              <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#bcbac9" }}>Total patients</p>
-              <p style={{ color: "#fff", fontSize: "24px", fontWeight: 700, marginTop: "4px" }}>{patientsCount}</p>
-            </div>
-            <div className="rounded-lg border p-4" style={{ borderColor: "#3f3a52", background: "#0e0c1f" }}>
-              <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#bcbac9" }}>Data access</p>
-              <p style={{ color: "#fff", fontSize: "14px", fontWeight: 600, marginTop: "4px" }}>Aggregate only</p>
-            </div>
-            <div className="rounded-lg border p-4" style={{ borderColor: "#3f3a52", background: "#0e0c1f" }}>
-              <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#bcbac9" }}>Policy</p>
-              <p style={{ color: "#7ee8c6", fontSize: "14px", fontWeight: 600, marginTop: "4px" }}>No raw biometrics</p>
-            </div>
-          </div>
         </div>
       )}
 
