@@ -18,7 +18,10 @@ export async function apiFetch(path: string, opts: FetchOpts = {}) {
     headers["content-type"] = "application/json";
   }
   if (opts.auth !== false) {
-    const t = getToken();
+    let t = getToken();
+    if (!t && process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true") {
+      t = "test";
+    }
     if (t) headers["Authorization"] = `Bearer ${t}`;
   }
   const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
@@ -68,9 +71,10 @@ export type PatientCreate = {
 export type Patient = PatientCreate & {
   id: string;
   doctor_id: string;
+  contact_number: string | null;
   created_at: string;
-  updated_at: string;
-  history?: PatientHistoryRecord[];
+  is_active?: boolean;
+  history: PatientHistoryRecord[];
 };
 export type PatientHistoryRecord = {
   id: string;
@@ -99,6 +103,10 @@ export function updatePatient(id: string, data: Partial<PatientCreate>): Promise
 }
 export function deletePatient(id: string): Promise<{ message: string }> {
   return apiFetch(`/api/patients/${id}`, { method: "DELETE", auth: true });
+}
+
+export function enablePatient(id: string): Promise<{ message: string }> {
+  return apiFetch(`/api/patients/${id}/enable`, { method: "POST", auth: true });
 }
 export function addPatientHistory(
   patientId: string,
@@ -270,7 +278,7 @@ export async function predictDorsalHand(file: File): Promise<DorsalHandPredictio
 }
 
 // Admin
-export type Doctor = { id: string; email: string | null; full_name: string; role: string };
+export type Doctor = { id: string; email: string | null; full_name: string; role: string; is_active?: boolean };
 export function listDoctors(): Promise<{ doctors: Doctor[] }> {
   return apiFetch("/api/admin/doctors", { auth: true });
 }
@@ -279,6 +287,10 @@ export function createDoctor(data: { email: string; password: string; full_name:
 }
 export function deleteDoctor(id: string): Promise<{ message: string }> {
   return apiFetch(`/api/admin/doctors/${id}`, { method: "DELETE", auth: true });
+}
+
+export function enableDoctor(id: string): Promise<{ message: string }> {
+  return apiFetch(`/api/admin/doctors/${id}/enable`, { method: "POST", auth: true });
 }
 
 export const API_BASE_URL = API_BASE;
