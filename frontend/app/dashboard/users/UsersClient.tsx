@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listDoctors, createDoctor, deleteDoctor, type Doctor } from "@/lib/api";
+import { listDoctors, createDoctor, deleteDoctor, enableDoctor, type Doctor } from "@/lib/api";
 import { listPatients } from "@/lib/api";
 
 export default function UsersClient() {
@@ -84,12 +84,27 @@ export default function UsersClient() {
       await deleteDoctor(id).catch(async () => {
         const base = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
         const r = await fetch(`${base}/api/admin/doctors/${id}`, { method: "DELETE" });
-        if (!r.ok) throw new Error("Delete failed");
+        if (!r.ok) throw new Error("Disable failed");
         return r.json();
       });
       await load();
     } catch (e: any) {
-      setError(e.message || "Delete failed");
+      setError(e.message || "Disable failed");
+    }
+  }
+
+  async function handleEnable(id: string) {
+    if (!confirm("Enable this doctor?")) return;
+    try {
+      await enableDoctor(id).catch(async () => {
+        const base = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+        const r = await fetch(`${base}/api/admin/doctors/${id}/enable`, { method: "POST" });
+        if (!r.ok) throw new Error("Enable failed");
+        return r.json();
+      });
+      await load();
+    } catch (e: any) {
+      setError(e.message || "Enable failed");
     }
   }
 
@@ -152,12 +167,19 @@ export default function UsersClient() {
                 </thead>
                 <tbody>
                   {doctors.map((d) => (
-                    <tr key={d.id} style={{ borderBottom: "1px solid #3f3a52" }}>
-                      <td className="px-6 py-4">{d.full_name}</td>
+                    <tr key={d.id} style={{ borderBottom: "1px solid #3f3a52", opacity: d.is_active === false ? 0.5 : 1 }}>
+                      <td className="px-6 py-4">
+                        {d.full_name}
+                        {d.is_active === false && <span className="ml-2 text-xs text-[#ff8a8a]">(Disabled)</span>}
+                      </td>
                       <td className="px-6 py-4" style={{ color: "#bcbac9" }}>{d.email || "—"}</td>
                       <td className="px-6 py-4" style={{ color: "#bcbac9" }}>{d.role}</td>
                       <td className="px-6 py-4">
-                        <button onClick={() => handleDelete(d.id)} className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "#ff8a8a", color: "#ff8a8a" }}>Disable</button>
+                        {d.is_active === false ? (
+                          <button onClick={() => handleEnable(d.id)} className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "#7ee8c6", color: "#7ee8c6" }}>Enable</button>
+                        ) : (
+                          <button onClick={() => handleDelete(d.id)} className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "#ff8a8a", color: "#ff8a8a" }}>Disable</button>
+                        )}
                       </td>
                     </tr>
                   ))}

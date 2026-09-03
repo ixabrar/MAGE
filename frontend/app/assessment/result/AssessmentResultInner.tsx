@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
+import DorsalHandExplainability from "@/components/DorsalHandExplainability";
 
 interface AssessmentResultData {
   assessment_id: string;
@@ -23,6 +24,23 @@ interface AssessmentResultData {
     >;
   };
 }
+
+interface DemoDorsalHistory {
+  tracking_enabled: boolean;
+  baseline_predicted_age: number | null;
+  latest_predicted_age: number | null;
+  change_from_baseline: number | null;
+  predictions: Array<{
+    id: string;
+    predicted_at: string;
+    predicted_age: number;
+    confidence: number;
+    age_bins: Record<string, number>;
+    is_baseline: boolean;
+  }>;
+}
+
+const DEMO_TRACKING_KEY = "mage:dorsal-tracking-demo";
 
 const COHORT_DETAILS: Record<
   string,
@@ -65,6 +83,18 @@ export default function AssessmentResultInner() {
   const [activeCohort, setActiveCohort] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "evidence">("overview");
 
+  const [dorsalExplanation, setDorsalExplanation] = useState<{
+    predicted_age: number;
+    confidence: number;
+    age_bins: Record<string, number>;
+    gradcam_data_url: string | null;
+    original_image_data_url: string | null;
+  } | null>(null);
+  const [trackingPrompt, setTrackingPrompt] = useState(true);
+  const [trackingBusy, setTrackingBusy] = useState(false);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [dorsalHistory, setDorsalHistory] = useState<DemoDorsalHistory | null>(null);
+
   useEffect(() => {
     if (!assessmentId) {
       setError("Missing assessment reference ID.");
@@ -97,10 +127,71 @@ export default function AssessmentResultInner() {
 
     loadAssessment();
 
+    const storedExplanation = sessionStorage.getItem("mage:dorsal-explanation");
+    if (storedExplanation) {
+      try {
+        const explanation = JSON.parse(storedExplanation);
+        setDorsalExplanation(explanation);
+        const storedTracking = localStorage.getItem(DEMO_TRACKING_KEY);
+        if (storedTracking) {
+          const history = JSON.parse(storedTracking) as DemoDorsalHistory;
+          if (history.tracking_enabled && !history.predictions.some((point) => point.id === assessmentId)) {
+            const nextPoint = {
+              id: assessmentId,
+              predicted_at: new Date().toISOString(),
+              predicted_age: explanation.predicted_age,
+              confidence: explanation.confidence,
+              age_bins: explanation.age_bins,
+              is_baseline: false,
+            };
+            const predictions = [...history.predictions, nextPoint];
+            const latest = predictions[predictions.length - 1];
+            const nextHistory = {
+              ...history,
+              predictions,
+              latest_predicted_age: latest.predicted_age,
+              change_from_baseline:
+                history.baseline_predicted_age == null
+                  ? null
+                  : Number((latest.predicted_age - history.baseline_predicted_age).toFixed(1)),
+            };
+            localStorage.setItem(DEMO_TRACKING_KEY, JSON.stringify(nextHistory));
+            setDorsalHistory(nextHistory);
+            setTrackingPrompt(false);
+          }
+        }
+      } catch {
+        sessionStorage.removeItem("mage:dorsal-explanation");
+      }
+    }
+
     return () => {
       cancelled = true;
     };
   }, [assessmentId]);
+
+  const handleStartTracking = () => {
+    if (!dorsalExplanation || !assessmentId) return;
+    const history: DemoDorsalHistory = {
+      tracking_enabled: true,
+      baseline_predicted_age: dorsalExplanation.predicted_age,
+      latest_predicted_age: dorsalExplanation.predicted_age,
+      change_from_baseline: 0,
+      predictions: [
+        {
+          id: assessmentId,
+          predicted_at: new Date().toISOString(),
+          predicted_age: dorsalExplanation.predicted_age,
+          confidence: dorsalExplanation.confidence,
+          age_bins: dorsalExplanation.age_bins,
+          is_baseline: true,
+        },
+      ],
+    };
+    localStorage.setItem(DEMO_TRACKING_KEY, JSON.stringify(history));
+    setDorsalHistory(history);
+    setTrackingPrompt(false);
+  };
 
   // Derived calculations
   const predictedAge = result?.result.fused_predicted_age || 0;
@@ -182,7 +273,7 @@ export default function AssessmentResultInner() {
   return (
     <div className="relative min-h-screen bg-black text-white selection:bg-[#c9b4fa]/30" suppressHydrationWarning>
       
-      {/* Global Print Stylesheet to guarantee pure clinical paper rendering */}
+      {/* Global Print Stylesheet for Pure White Clinical PDF */}
       <style jsx global>{`
         @media print {
           @page {
@@ -339,6 +430,36 @@ export default function AssessmentResultInner() {
                   </div>
                 </div>
               </div>
+
+              {/* Dorsal Hand Grad-CAM & Tracking Card */}
+              {dorsalExplanation && (
+                <div className="space-y-4">
+                  <DorsalHandExplainability
+                    originalImageDataUrl={dorsalExplanation.original_image_data_url}
+                    gradcamDataUrl={dorsalExplanation.gradcam_data_url}
+                    predictedAge={dorsalExplanation.predicted_age}
+                    confidence={dorsalExplanation.confidence}
+                    source="real_model"
+                    qualityMessage={null}
+                  />
+
+                  {trackingPrompt && !dorsalHistory?.tracking_enabled && (
+                    <div className="rounded-xl border border-[#c9b4fa]/30 bg-[#0e0c1f] p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div>
+                        <h4 className="text-sm font-bold text-white">Start Longitudinal Dorsal Age Tracking?</h4>
+                        <p className="mt-1 text-xs text-[#bcbac9]">Track biological aging velocity and compare against baseline across repeat scans.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleStartTracking}
+                        className="rounded-full bg-[#c9b4fa] px-5 py-2 text-xs font-bold text-[#1b1938] hover:bg-[#d4c2fb]"
+                      >
+                        Enable Tracking
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Screen Tab Switcher */}
               <div className="flex border-b border-white/10 gap-6 text-sm font-semibold">

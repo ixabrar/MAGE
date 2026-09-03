@@ -63,13 +63,24 @@ function buildPanelState(active: ModalityId[]) {
 }
 
 export default function Home() {
+  const { data: session, status } = useSession();
+
+  const handleSignOut = async () => {
+    try {
+      localStorage.removeItem("mage_access_token");
+      localStorage.removeItem("mage_refresh_token");
+      localStorage.removeItem("mage_user");
+    } catch {}
+    await signOut({ redirect: false });
+    window.location.replace("/");
+  };
+
   const [activeModalities, setActiveModalities] = useState<PublicModalityId[]>(["face", "dorsal_hand"]);
   const panel = useMemo(() => buildPanelState(activeModalities), [activeModalities]);
   const heroRef = useRef<HTMLDivElement | null>(null);
   const heroSectionRef = useRef<HTMLDivElement | null>(null);
   const fieldRef = useRef<{ triggerExplosion: (x: number, y: number) => void } | null>(null);
   const audioRef = useRef<{ playClick: () => void } | null>(null);
-  const { data: session, status } = useSession();
   const role = (session?.user as any)?.role as string | undefined;
   const isLoggedIn = !!session?.user;
   const isDoctor = role === "doctor" || role === "clinician";
@@ -267,7 +278,7 @@ export default function Home() {
                     {session?.user?.email}
                   </span>
                   <button
-                    onClick={() => signOut({ callbackUrl: "/" })}
+                    onClick={handleSignOut}
                     className="rounded-full border px-5 py-2 text-sm font-semibold transition-colors duration-150 hover:border-white hover:bg-white/10"
                     style={{
                       fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
@@ -337,7 +348,7 @@ export default function Home() {
                     {session?.user?.email}
                   </span>
                   <button
-                    onClick={() => signOut({ callbackUrl: "/" })}
+                    onClick={handleSignOut}
                     className="rounded-full border px-5 py-2 text-sm font-semibold transition-colors duration-150 hover:border-white hover:bg-white/10"
                     style={{
                       fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
@@ -380,7 +391,7 @@ export default function Home() {
                     {session?.user?.email}
                   </span>
                   <button
-                    onClick={() => signOut({ callbackUrl: "/" })}
+                    onClick={handleSignOut}
                     className="rounded-full border px-5 py-2 text-sm font-semibold"
                     style={{ borderColor: "#3f3a52", color: "#bcbac9", fontSize: "14px", fontWeight: 600 }}
                   >
@@ -443,10 +454,10 @@ export default function Home() {
                     >
                       Public age estimation — upload a photo, get an AI age estimate instantly. For <span style={{ color: "#fff" }}>biological age</span> with gap analysis & report, visit the doctor portal.
                     </p>
-                    <div data-animate className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                    <div data-animate className="mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
                       <motion.a
                         href="/assessment"
-                        className="inline-flex items-center justify-center rounded-full px-7 py-3 text-base font-semibold"
+                        className="inline-flex items-center justify-center whitespace-nowrap rounded-full px-8 py-3.5 text-base font-semibold leading-none"
                         style={{
                           fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
                           fontSize: "16px",
@@ -462,7 +473,7 @@ export default function Home() {
                       </motion.a>
                       <a
                         href="#modalities"
-                        className="inline-flex items-center justify-center rounded-full border px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-white/10"
+                        className="inline-flex items-center justify-center whitespace-nowrap rounded-full border px-7 py-3.5 text-base font-semibold leading-none text-white transition-colors hover:bg-white/10"
                         style={{
                           fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
                           fontSize: "16px",
@@ -478,37 +489,28 @@ export default function Home() {
                     </p>
                   </div>
 
-                  {/* Modality cards — large, tappable, visual */}
-                  <div data-animate className="mx-auto mt-12 grid max-w-3xl gap-4 sm:grid-cols-2">
+                  {/* Modality pills — compact with breathing space */}
+                  <div data-animate className="mx-auto mt-8 flex max-w-md items-center justify-center gap-4 sm:gap-5">
                     {[
-                      { id: "face", label: "Face", desc: "Frontal photo, good light", icon: "◐", href: "/assessment?selected=face" },
-                      { id: "dorsal_hand", label: "Dorsal Hand", desc: "Back of hand, palm down", icon: "✋", href: "/assessment?selected=dorsal_hand" },
+                      { id: "face", label: "Face", icon: "◐" },
+                      { id: "dorsal_hand", label: "Hand", icon: "✋" },
                     ].map((m) => {
                       const isActive = activeModalities.includes(m.id as PublicModalityId);
                       return (
-                        <a
+                        <button
                           key={m.id}
-                          href={m.href}
-                          onClick={(e) => { e.preventDefault(); toggle(m.id as PublicModalityId); }}
-                          className="group relative flex flex-col rounded-2xl border p-6 text-left transition-all hover:scale-[1.01]"
+                          type="button"
+                          onClick={() => toggle(m.id as PublicModalityId)}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-sm font-semibold transition-all"
                           style={{
-                            background: isActive ? "rgba(201,180,250,0.12)" : "#0e0c1f",
-                            borderColor: isActive ? "#c9b4fa" : "#3f3a52",
-                            boxShadow: isActive ? "0 0 0 1px rgba(201,180,250,0.3)" : "none",
+                            background: isActive ? "#c9b4fa" : "rgba(255,255,255,0.04)",
+                            borderColor: isActive ? "#c9b4fa" : "#1e1c2a",
+                            color: isActive ? "#1b1938" : "#bcbac9",
                           }}
                         >
-                          <div className="flex items-start justify-between">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg" style={{ background: isActive ? "#c9b4fa" : "rgba(255,255,255,0.06)", color: isActive ? "#1b1938" : "#bcbac9" }}>
-                              {m.icon}
-                            </div>
-                            <span className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: isActive ? "#c9b4fa" : "#3f3a52", color: isActive ? "#c9b4fa" : "#5a5772", background: isActive ? "rgba(201,180,250,0.15)" : "transparent" }}>
-                              {isActive ? "Selected" : "Select"}
-                            </span>
-                          </div>
-                          <h3 className="mt-4 text-lg font-semibold" style={{ fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif", color: "#fff" }}>{m.label}</h3>
-                          <p className="mt-1 text-sm" style={{ color: "#bcbac9" }}>{m.desc}</p>
-                          <p className="mt-3 text-xs" style={{ color: "#5a5772" }}>Camera / Upload • JPG, PNG, WebP • Max 10MB</p>
-                        </a>
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full text-xs" style={{ background: isActive ? "rgba(27,25,56,0.15)" : "rgba(201,180,250,0.12)", color: isActive ? "#1b1938" : "#c9b4fa" }}>{m.icon}</span>
+                          {m.label}
+                        </button>
                       );
                     })}
                   </div>
@@ -553,17 +555,17 @@ export default function Home() {
                   <p data-animate className="mx-auto mt-6 max-w-xl" style={{ fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif", fontSize: "17px", lineHeight: 1.6, color: "#bcbac9" }}>
                     Welcome, {(session?.user as any)?.name || session?.user?.email}. Add patients, upload reports, and track bio-age trends — all isolated to your account.
                   </p>
-                  <div data-animate className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                  <div data-animate className="mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
                     <motion.a
                       href="/dashboard/patients"
-                      className="inline-flex items-center justify-center rounded-full px-7 py-3 font-semibold"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-full px-8 py-3.5 font-semibold leading-none"
                       style={{ fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif", fontSize: "16px", fontWeight: 700, background: "#c9b4fa", color: "#1b1938" }}
                       whileHover={{ backgroundColor: "#d4c2fb", scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                     >
                       Go to Patients →
                     </motion.a>
-                    <a href="/dashboard/assessments" className="inline-flex items-center justify-center rounded-full border px-6 py-3 font-semibold text-white hover:bg-white/10" style={{ borderColor: "rgba(255,255,255,0.2)", fontSize: "16px" }}>
+                    <a href="/dashboard/assessments" className="inline-flex items-center justify-center whitespace-nowrap rounded-full border px-7 py-3.5 font-semibold leading-none text-white hover:bg-white/10" style={{ borderColor: "rgba(255,255,255,0.2)", fontSize: "16px" }}>
                       New assessment
                     </a>
                   </div>
@@ -709,17 +711,17 @@ export default function Home() {
                   <p data-animate className="mx-auto mt-6 max-w-xl" style={{ fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif", fontSize: "17px", lineHeight: 1.6, color: "#bcbac9" }}>
                     No patient biometrics here — only users, roles, and logs. Use the doctor portal for patient care.
                   </p>
-                  <div data-animate className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                  <div data-animate className="mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
                     <motion.a
                       href="/dashboard/users"
-                      className="inline-flex items-center justify-center rounded-full px-7 py-3 font-semibold"
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-full px-8 py-3.5 font-semibold leading-none"
                       style={{ fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif", fontSize: "16px", fontWeight: 700, background: "#c9b4fa", color: "#1b1938" }}
                       whileHover={{ backgroundColor: "#d4c2fb", scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                     >
                       Manage Doctors →
                     </motion.a>
-                    <a href="/dashboard/audit" className="inline-flex items-center justify-center rounded-full border px-6 py-3 font-semibold text-white hover:bg-white/10" style={{ borderColor: "rgba(255,255,255,0.2)", fontSize: "16px" }}>
+                    <a href="/dashboard/audit" className="inline-flex items-center justify-center whitespace-nowrap rounded-full border px-7 py-3.5 font-semibold leading-none text-white hover:bg-white/10" style={{ borderColor: "rgba(255,255,255,0.2)", fontSize: "16px" }}>
                       View audit logs
                     </a>
                   </div>
@@ -762,38 +764,6 @@ export default function Home() {
               )}
             </div>
 
-            <div
-              className="hidden md:flex items-end justify-between"
-              style={{
-                fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
-                fontSize: "12px",
-                fontWeight: 540,
-                lineHeight: 1.4,
-                letterSpacing: "0px",
-                color: "#bcbac9",
-              }}
-            >
-              <div className="flex items-center gap-8">
-                <div>
-                  <span className="block text-white" style={{ fontSize: "20px", fontWeight: 540 }}>
-                    2
-                  </span>
-                  <span className="mt-1 block">Modalities</span>
-                </div>
-                <div>
-                  <span className="block text-white" style={{ fontSize: "20px", fontWeight: 540 }}>
-                    {Math.pow(2, 2) - 1}
-                  </span>
-                  <span className="mt-1 block">Combinations</span>
-                </div>
-                <div>
-                  <span className="block text-white" style={{ fontSize: "20px", fontWeight: 540 }}>
-                    1
-                  </span>
-                  <span className="mt-1 block">Fusion layer</span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -804,26 +774,24 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-6 sm:px-10 lg:px-16" aria-hidden="true">
           <div className="h-px w-full" style={{ background: "linear-gradient(to right, transparent, #1e1c2a, transparent)" }} />
         </div>
-        {/* Modalities — clean, minimal */}
-        <section id="modalities" className="relative py-16 sm:py-20 bg-black" suppressHydrationWarning>
-          <div className="absolute inset-x-0 top-0 h-24 bg-fade-top pointer-events-none" aria-hidden="true" />
-          <div className="mx-auto max-w-7xl px-6 sm:px-10 lg:px-16 relative z-10">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl" style={{ fontFamily: "var(--font-display,'Rajdhani'),system-ui,sans-serif", color: "#fff" }}>
-                Two modalities.
-              </h2>
-              <p className="max-w-sm text-sm leading-relaxed" style={{ color: "#5a5772" }}>Pick one or both. Fusion handles the rest.</p>
-            </div>
+        {/* Modalities — readable, centered */}
+        <section id="modalities" className="relative py-14 sm:py-18 bg-black" suppressHydrationWarning>
+          <div className="absolute inset-x-0 top-0 h-16 bg-fade-top pointer-events-none" aria-hidden="true" />
+          <div className="mx-auto max-w-3xl px-6 sm:px-10 relative z-10 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[1.6px]" style={{ color: "#c9b4fa" }}>Modalities</p>
+            <h2 className="mx-auto mt-2 max-w-xl text-3xl font-semibold tracking-tight sm:text-4xl" style={{ fontFamily: "var(--font-display,'Rajdhani'),system-ui,sans-serif", color: "#fff" }}>
+              Two ways in. One estimate.
+            </h2>
+            <p className="mx-auto mt-3 max-w-lg text-base leading-relaxed" style={{ color: "#bcbac9" }}>Face or Hand — use one or both. Your photo, your choice.</p>
 
-            <div className="mt-10 grid gap-4 sm:grid-cols-2">
+            <div className="mx-auto mt-8 grid max-w-lg gap-4 sm:grid-cols-2">
               {publicModalities.map((m) => (
-                <div key={m.id} className="group rounded-2xl border p-6 transition-colors hover:border-[#c9b4fa]/30" style={{ background: "#0e0c1f", borderColor: "#1e1c2a" }}>
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm" style={{ background: "rgba(201,180,250,0.15)", color: "#c9b4fa" }}>
+                <div key={m.id} className="flex flex-col items-center rounded-xl border p-5 text-center" style={{ background: "#0e0c1f", borderColor: "#1e1c2a" }}>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl text-base" style={{ background: "rgba(201,180,250,0.12)", color: "#c9b4fa" }}>
                     {m.id === "face" ? "◐" : "✋"}
                   </div>
-                  <h3 className="mt-4 text-base font-semibold" style={{ color: "#fff" }}>{m.label}</h3>
-                  <p className="mt-1 text-sm leading-relaxed" style={{ color: "#bcbac9" }}>{m.id === "face" ? "Frontal face, good light, no filter." : "Back of hand, palm down, fill the frame."}</p>
-                  <p className="mt-3 inline-flex rounded-full border px-2.5 py-1 text-xs" style={{ borderColor: "#1e1c2a", color: "#5a5772", background: "rgba(255,255,255,0.03)" }}>{m.inputType}</p>
+                  <h3 className="mt-3 text-base font-semibold" style={{ color: "#fff" }}>{m.label}</h3>
+                  <p className="mt-1 text-sm" style={{ color: "#bcbac9" }}>{m.id === "face" ? "Front face, good light" : "Back of hand, palm down"}</p>
                 </div>
               ))}
             </div>
@@ -868,16 +836,15 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {[
-                { title: "Encrypted upload", desc: "TLS 1.3, 10MB limit, image/PDF validation. No public asset URLs.", icon: "🔒" },
-                { title: "Isolated storage", desc: "Biometric blobs separate from profiles, with retention & deletion.", icon: "🛡️" },
-                { title: "Consent first", desc: "Processing starts only after explicit consent. Review or delete anytime.", icon: "✓" },
-                { title: "Audit logs", desc: "Admin sees who did what, when — never raw images or report content.", icon: "≡" },
+                { title: "Encrypted upload", desc: "TLS 1.3, 10MB limit, image & PDF validation. No public URLs." },
+                { title: "Isolated storage", desc: "Blobs separate from profiles. Retention & deletion built-in." },
+                { title: "Consent first", desc: "Starts only after explicit consent. Review or delete anytime." },
+                { title: "Audit logs", desc: "Who did what, when — never raw images or report content." },
               ].map((item) => (
-                <div key={item.title} className="group rounded-2xl border p-6 transition-colors hover:border-[#c9b4fa]/40" style={{ background: "#0e0c1f", borderColor: "#3f3a52" }}>
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg text-sm" style={{ background: "rgba(201,180,250,0.15)", color: "#c9b4fa" }}>{item.icon}</div>
-                  <h3 className="mt-4 text-sm font-semibold" style={{ color: "#fff" }}>{item.title}</h3>
+                <div key={item.title} className="rounded-xl border p-5" style={{ background: "#0e0c1f", borderColor: "#1e1c2a" }}>
+                  <h3 className="text-sm font-semibold" style={{ color: "#fff" }}>{item.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed" style={{ color: "#bcbac9" }}>{item.desc}</p>
                 </div>
               ))}
@@ -927,7 +894,7 @@ export default function Home() {
                 <p className="mt-3 max-w-sm text-sm leading-relaxed" style={{ color: "#bcbac9" }}>
                   Multimodal biological-age research — face, dorsal hand & lab fusion via ARM + PFM. Built for study, not diagnosis.
                 </p>
-                <p className="mt-4 text-xs" style={{ color: "#5a5772" }}>Vikas • Abrar • Pruvesh — continuous research loop.</p>
+                <p className="mt-4 text-xs leading-relaxed" style={{ color: "#5a5772" }}>Vikas • Abrar • Pruvesh • Vinita • Charudatta • Niranjan • Mihir — continuous research loop.</p>
               </div>
 
               <div className="lg:col-span-2">

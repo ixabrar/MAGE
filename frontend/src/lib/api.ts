@@ -18,7 +18,10 @@ export async function apiFetch(path: string, opts: FetchOpts = {}) {
     headers["content-type"] = "application/json";
   }
   if (opts.auth !== false) {
-    const t = getToken();
+    let t = getToken();
+    if (!t && process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true") {
+      t = "test";
+    }
     if (t) headers["Authorization"] = `Bearer ${t}`;
   }
   const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
@@ -63,13 +66,16 @@ export type PatientCreate = {
   date_of_birth: string; // ISO date yyyy-mm-dd
   gender: string;
   contact_number?: string;
+  email?: string;
 };
 export type Patient = PatientCreate & {
   id: string;
   doctor_id: string;
+  contact_number?: string | null;
   created_at: string;
-  updated_at: string;
-  history?: PatientHistoryRecord[];
+  updated_at?: string;
+  is_active?: boolean;
+  history: PatientHistoryRecord[];
 };
 export type PatientHistoryRecord = {
   id: string;
@@ -99,6 +105,10 @@ export function updatePatient(id: string, data: Partial<PatientCreate>): Promise
 export function deletePatient(id: string): Promise<{ message: string }> {
   return apiFetch(`/api/patients/${id}`, { method: "DELETE", auth: true });
 }
+
+export function enablePatient(id: string): Promise<{ message: string }> {
+  return apiFetch(`/api/patients/${id}/enable`, { method: "POST", auth: true });
+}
 export function addPatientHistory(
   patientId: string,
   data: Partial<Pick<PatientHistoryRecord, "chronological_age" | "predicted_bio_age" | "bio_age_gap" | "ai_summary" | "doctor_remarks">>
@@ -108,6 +118,21 @@ export function addPatientHistory(
     body: JSON.stringify(data),
     auth: true,
   });
+}
+export async function uploadHistoryPdf(historyId: string, blob: Blob): Promise<{ status: string; message: string }> {
+  const fd = new FormData();
+  fd.append("file", blob, "report.pdf");
+  return apiFetch(`/api/patients/history/${historyId}/pdf`, { method: "POST", body: fd, auth: true });
+}
+export async function viewHistoryPdf(historyId: string): Promise<void> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}/api/patients/history/${historyId}/pdf`, { headers });
+  if (!res.ok) throw new Error("PDF not found or unauthorized");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank");
 }
 
 // Assessment (public)
@@ -213,6 +238,27 @@ export async function predictBioAgePdf(patientId: string, payload: BioAgePredict
   return await res.blob();
 }
 
+// JSON version — same prediction as PDF, but returns JSON so frontend and PDF can share one prediction
+export type BioAgeJsonResult = {
+  chronological_age: number;
+  predicted_bio_age: number;
+  bio_age_gap: number;
+  top_contributing_factors: { feature: string; impact: number; value: number }[];
+  recommendations?: string;
+};
+
+export async function predictBioAgeJson(patientId: string, payload: BioAgePredictionRequest): Promise<BioAgeJsonResult> {
+  return apiFetch(`/api/patients/${patientId}/predict-bio-age/json`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    auth: true,
+  });
+}
+
+export async function emailReport(patientId: string): Promise<{ status: string; message: string }> {
+  return apiFetch(`/api/patients/${patientId}/email-report`, { method: "POST", auth: true });
+}
+
 // Dorsal hand — ResNet18 (resnet18_consistent_age_best.pth)
 export type DorsalHandPrediction = {
   model_name: string;
@@ -220,6 +266,8 @@ export type DorsalHandPrediction = {
   confidence: number;
   age_bins: Record<string, number>;
   source: string;
+  gradcam_data_url: string | null;
+  original_image_data_url: string | null;
 };
 
 export async function predictDorsalHand(file: File): Promise<DorsalHandPrediction> {
@@ -249,8 +297,41 @@ export async function predictDorsalHand(file: File): Promise<DorsalHandPredictio
   return res.json();
 }
 
+export const predictDorsalHandWithExplanation = predictDorsalHand;
+
+export type DorsalHistory = {
+  tracking_enabled: boolean;
+  baseline_predicted_age: number | null;
+  baseline_at: string | null;
+  latest_predicted_age: number | null;
+  change_from_baseline: number | null;
+  predictions: Array<{
+    id: number;
+    predicted_at: string;
+    predicted_age: number;
+    confidence: number;
+    age_bins: Record<string, number>;
+    is_baseline: boolean;
+  }>;
+};
+
+export function startDorsalTracking(prediction: Pick<DorsalHandPrediction, "predicted_age" | "confidence" | "age_bins">) {
+  return apiFetch("/api/dorsal-tracking/baseline", {
+    method: "POST",
+    body: JSON.stringify({
+      predicted_age: prediction.predicted_age,
+      confidence: prediction.confidence,
+      age_bins: prediction.age_bins,
+    }),
+  }) as Promise<{ tracking_enabled: boolean; baseline_predicted_age: number }>;
+}
+
+export function getDorsalHistory() {
+  return apiFetch("/api/dorsal-tracking/history") as Promise<DorsalHistory>;
+}
+
 // Admin
-export type Doctor = { id: string; email: string | null; full_name: string; role: string };
+export type Doctor = { id: string; email: string | null; full_name: string; role: string; is_active?: boolean };
 export function listDoctors(): Promise<{ doctors: Doctor[] }> {
   return apiFetch("/api/admin/doctors", { auth: true });
 }
@@ -259,6 +340,10 @@ export function createDoctor(data: { email: string; password: string; full_name:
 }
 export function deleteDoctor(id: string): Promise<{ message: string }> {
   return apiFetch(`/api/admin/doctors/${id}`, { method: "DELETE", auth: true });
+}
+
+export function enableDoctor(id: string): Promise<{ message: string }> {
+  return apiFetch(`/api/admin/doctors/${id}/enable`, { method: "POST", auth: true });
 }
 
 export const API_BASE_URL = API_BASE;

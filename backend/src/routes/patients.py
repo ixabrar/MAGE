@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from typing import List
 from uuid import UUID
 from datetime import datetime, date
@@ -7,30 +7,33 @@ import io
 import os
 
 from core.supabase import supabase
-from schemas.patient import PatientCreate, PatientUpdate, PatientResponse, PatientHistoryRecord, PatientHistoryRecordCreate, BioAgePredictionRequest
+from schemas.patient import (
+    PatientCreate,
+    PatientUpdate,
+    PatientResponse,
+    PatientHistoryRecord,
+    PatientHistoryRecordCreate,
+    BioAgePredictionRequest
+)
 from services.bio_age_service import predict_bio_age_and_explain
 from services.pdf_service import generate_bio_age_pdf
 from services.llm_service import generate_health_recommendations
 from services.email_service import send_report_email
 
-router = APIRouter(prefix="/api/patients", tags=["patients"])
+from middleware.auth import get_current_doctor_id
 
 
-# Dummy dependency to simulate doctor auth for now
-# In a real scenario, this would decode the Supabase JWT and extract the user ID
-def get_current_doctor_id() -> str:
-    # Example hardcoded doctor UUID for testing purposes
-    return "00000000-0000-0000-0000-000000000001"
+router = APIRouter(
+    prefix="/api/patients",
+    tags=["patients"]
+)
 
 
 @router.post("/", response_model=PatientResponse)
 async def create_patient(patient: PatientCreate, doctor_id: str = Depends(get_current_doctor_id)):
     data = patient.model_dump()
-    data["doctor_id"] = doctor_id
-    
-    # Supabase uses ISO strings for dates
+    data["doctor_id"] = doctor_id    
     data["date_of_birth"] = data["date_of_birth"].isoformat()
-    
     response = supabase.table("patients").insert(data).execute()
     
     if not response.data:
@@ -79,18 +82,28 @@ async def update_patient(patient_id: UUID, patient: PatientUpdate, doctor_id: st
 
 
 @router.delete("/{patient_id}")
-async def delete_patient(patient_id: UUID, doctor_id: str = Depends(get_current_doctor_id)):
-    # Verify ownership first
+async def disable_patient(patient_id: UUID, doctor_id: str = Depends(get_current_doctor_id)):
+    # Verify ownership
     verify = supabase.table("patients").select("id").eq("id", str(patient_id)).eq("doctor_id", doctor_id).execute()
     if not verify.data:
         raise HTTPException(status_code=404, detail="Patient not found or unauthorized")
         
-    # First delete history (or rely on CASCADE in DB schema)
-    supabase.table("patient_history_records").delete().eq("patient_id", str(patient_id)).execute()
+    # Disable patient by updating is_active flag
+    response = supabase.table("patients").update({"is_active": False}).eq("id", str(patient_id)).execute()
     
-    # Then delete patient
-    response = supabase.table("patients").delete().eq("id", str(patient_id)).execute()
-    return {"message": "Patient deleted successfully"}
+    return {"message": "Patient disabled successfully"}
+
+@router.post("/{patient_id}/enable")
+async def enable_patient(patient_id: UUID, doctor_id: str = Depends(get_current_doctor_id)):
+    # Verify ownership
+    verify = supabase.table("patients").select("id").eq("id", str(patient_id)).eq("doctor_id", doctor_id).execute()
+    if not verify.data:
+        raise HTTPException(status_code=404, detail="Patient not found or unauthorized")
+        
+    # Enable patient by updating is_active flag
+    response = supabase.table("patients").update({"is_active": True}).eq("id", str(patient_id)).execute()
+    
+    return {"message": "Patient enabled successfully"}
 
 
 @router.post("/{patient_id}/history", response_model=PatientHistoryRecord)
@@ -174,6 +187,37 @@ async def predict_bio_age(
         }
     )
 
+@router.post("/{patient_id}/predict-bio-age/json")
+async def predict_bio_age_json(
+    patient_id: UUID,
+    payload: BioAgePredictionRequest,
+    doctor_id: str = Depends(get_current_doctor_id)
+):
+    # Same as predict-bio-age but returns JSON so frontend display == PDF
+    verify = supabase.table("patients").select("*").eq("id", str(patient_id)).eq("doctor_id", doctor_id).execute()
+    if not verify.data:
+        raise HTTPException(status_code=404, detail="Patient not found or unauthorized")
+    patient_data = verify.data[0]
+    dob_str = patient_data.get("date_of_birth")
+    if not dob_str:
+        raise HTTPException(status_code=400, detail="Patient date of birth is missing")
+    dob = date.fromisoformat(dob_str[:10])
+    today = date.today()
+    chronological_age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    try:
+        features_dict = payload.model_dump()
+        analysis_results = predict_bio_age_and_explain(features_dict, float(chronological_age))
+        if analysis_results.get("bio_age_gap", 0) > 0:
+            factors = analysis_results.get("top_contributing_factors", [])
+            recommendations_html = generate_health_recommendations(factors)
+            analysis_results["recommendations"] = recommendations_html
+        else:
+            analysis_results["recommendations"] = ""
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+    return JSONResponse(content=analysis_results)
+
+
 @router.post("/{patient_id}/email-report")
 async def email_patient_report(
     patient_id: UUID, 
@@ -202,3 +246,50 @@ async def email_patient_report(
     background_tasks.add_task(send_report_email, patient_email, patient_name, pdf_path)
     
     return {"status": "success", "message": f"Email is being sent to {patient_email}"}
+
+
+@router.post("/history/{history_id}/pdf")
+async def upload_history_pdf(
+    history_id: UUID,
+    file: UploadFile = File(...),
+    doctor_id: str = Depends(get_current_doctor_id)
+):
+    # Verify ownership of the history record
+    verify = supabase.table("patient_history_records").select("id, patient_id").eq("id", str(history_id)).eq("doctor_id", doctor_id).execute()
+    if not verify.data:
+        raise HTTPException(status_code=404, detail="History record not found or unauthorized")
+        
+    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    pdf_path = os.path.join(uploads_dir, f"history_{history_id}.pdf")
+    
+    try:
+        content = await file.read()
+        with open(pdf_path, "wb") as f:
+            f.write(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save PDF: {str(e)}")
+        
+    return {"status": "success", "message": "PDF linked to history record"}
+
+@router.get("/history/{history_id}/pdf")
+async def get_history_pdf(
+    history_id: UUID,
+    doctor_id: str = Depends(get_current_doctor_id)
+):
+    # Verify ownership
+    verify = supabase.table("patient_history_records").select("id").eq("id", str(history_id)).eq("doctor_id", doctor_id).execute()
+    if not verify.data:
+        raise HTTPException(status_code=404, detail="History record not found or unauthorized")
+        
+    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+    pdf_path = os.path.join(uploads_dir, f"history_{history_id}.pdf")
+    
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="PDF report not found for this history record")
+        
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=f"bio_age_report_history_{history_id}.pdf"
+    )

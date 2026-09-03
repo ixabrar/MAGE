@@ -4,6 +4,7 @@ import { Suspense, useMemo, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import BiometricCameraCapture from "@/components/camera/BiometricCameraCapture";
+import DorsalHandExplainability from "@/components/DorsalHandExplainability";
 
 const steps = [
   { key: "face", label: "Face", hint: "Camera / Upload" },
@@ -72,13 +73,25 @@ function AssessmentUploadInner() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submittedAssessmentId, setSubmittedAssessmentId] = useState<string | null>(null);
-  const [dorsalResult, setDorsalResult] = useState<null | { predicted_age: number; confidence: number; age_bins: Record<string, number>; source: string }>(null);
+  const [dorsalResult, setDorsalResult] = useState<null | {
+    predicted_age: number;
+    confidence: number;
+    age_bins: Record<string, number>;
+    source: string;
+    gradcam_data_url: string | null;
+    original_image_data_url: string | null;
+  }>(null);
   const [dorsalLoading, setDorsalLoading] = useState(false);
+  const [dorsalQualityError, setDorsalQualityError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = async (step: StepKey, file: File | null, customPreviewUrl?: string) => {
     setFiles((current) => ({ ...current, [step]: file }));
     setSubmitError(null);
+    if (step === "dorsal_hand") {
+      setDorsalResult(null);
+      setDorsalQualityError(null);
+    }
 
     if (file) {
       if (customPreviewUrl) {
@@ -90,7 +103,7 @@ function AssessmentUploadInner() {
         setFilePreviews((prev) => ({ ...prev, [step]: null }));
       }
 
-      // Biometric validation check for face and dorsal hand images
+      // 1. Biometric validation check
       if (step === "face" || step === "dorsal_hand") {
         setValidations((prev) => ({
           ...prev,
@@ -140,6 +153,25 @@ function AssessmentUploadInner() {
           [step]: { status: "valid", message: "Report uploaded." },
         }));
       }
+
+      // 2. Dorsal Grad-CAM preview feature
+      if (step === "dorsal_hand") {
+        setDorsalLoading(true);
+        try {
+          const { predictDorsalHandWithExplanation } = await import("@/lib/api");
+          const real = await predictDorsalHandWithExplanation(file);
+          setDorsalResult(real);
+          if (real.gradcam_data_url || real.original_image_data_url) {
+            try {
+              sessionStorage.setItem("mage:dorsal-explanation", JSON.stringify(real));
+            } catch {}
+          }
+        } catch (e) {
+          console.warn("Dorsal preview warning:", e);
+        } finally {
+          setDorsalLoading(false);
+        }
+      }
     } else {
       setFilePreviews((prev) => ({ ...prev, [step]: null }));
       setValidations((prev) => ({
@@ -171,7 +203,7 @@ function AssessmentUploadInner() {
   }, [activeStep]);
 
   const handleSubmit = async () => {
-    // Check if any uploaded image failed biometric validation
+    // Block if biometric validation failed
     for (const step of availableSteps) {
       if (files[step.key] && validations[step.key].status === "invalid") {
         setSubmitError(`Please replace the invalid ${step.label} photo before continuing: ${validations[step.key].message}`);
@@ -181,28 +213,10 @@ function AssessmentUploadInner() {
 
     setSubmitting(true);
     setSubmitError(null);
-    setDorsalResult(null);
 
     try {
       const modalities = availableSteps.map((step) => step.key);
       const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-
-      const dorsalFile = files["dorsal_hand"];
-      let previewPromise: Promise<void> | null = null;
-      if (modalities.includes("dorsal_hand") && dorsalFile) {
-        setDorsalLoading(true);
-        previewPromise = (async () => {
-          try {
-            const { predictDorsalHand } = await import("@/lib/api");
-            const real = await predictDorsalHand(dorsalFile);
-            setDorsalResult(real);
-          } catch (e) {
-            console.warn("dorsal preview failed, will rely on fusion real inference", e);
-          } finally {
-            setDorsalLoading(false);
-          }
-        })();
-      }
 
       // Build multipart FormData with real file bytes
       const formData = new FormData();
@@ -212,10 +226,6 @@ function AssessmentUploadInner() {
         if (file) {
           formData.append(step.key, file, file.name);
         }
-      }
-
-      if (previewPromise) {
-        await Promise.race([previewPromise, new Promise((r) => setTimeout(r, 3000))]);
       }
 
       const response = await fetch(`${apiBase}/api/assessment`, {
@@ -232,13 +242,7 @@ function AssessmentUploadInner() {
       setSubmittedAssessmentId(data.assessment_id);
       setSubmitted(true);
 
-      if (dorsalFile && dorsalResult) {
-        setTimeout(() => router.push(`/assessment/processing?assessment_id=${data.assessment_id}`), 1200);
-      } else if (dorsalFile) {
-        setTimeout(() => router.push(`/assessment/processing?assessment_id=${data.assessment_id}`), 500);
-      } else {
-        router.push(`/assessment/processing?assessment_id=${data.assessment_id}`);
-      }
+      router.push(`/assessment/processing?assessment_id=${data.assessment_id}`);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Submission failed");
       setSubmitting(false);
@@ -461,6 +465,18 @@ function AssessmentUploadInner() {
                           Retake or Upload Different Image
                         </button>
                       </div>
+                    )}
+
+                    {/* Grad-CAM Dorsal Hand Explainability Card */}
+                    {activeStep === "dorsal_hand" && dorsalResult && (
+                      <DorsalHandExplainability
+                        originalImageDataUrl={dorsalResult.original_image_data_url}
+                        gradcamDataUrl={dorsalResult.gradcam_data_url}
+                        predictedAge={dorsalResult.predicted_age}
+                        confidence={dorsalResult.confidence}
+                        source={dorsalResult.source}
+                        qualityMessage={dorsalQualityError}
+                      />
                     )}
                   </div>
                 ) : inputModes[activeStep] === "camera" && (activeStep === "face" || activeStep === "dorsal_hand") ? (

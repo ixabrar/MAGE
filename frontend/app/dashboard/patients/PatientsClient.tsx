@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { listPatients, createPatient, deletePatient, updatePatient, type Patient } from "@/lib/api";
+import { listPatients, createPatient, deletePatient, updatePatient, enablePatient, type Patient } from "@/lib/api";
 import { getStoredUser } from "@/lib/authStore";
 import { mockListPatients, mockCreatePatient, mockUpdatePatient, mockDeletePatient } from "@/lib/mockPatients";
 
@@ -22,7 +22,7 @@ export default function PatientsClient() {
   const [offline, setOffline] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);
-  const [form, setForm] = useState({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "" });
+  const [form, setForm] = useState({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "", email: "" });
   const [submitting, setSubmitting] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -106,7 +106,7 @@ export default function PatientsClient() {
       }
       setShowAdd(false);
       setEditing(null);
-      setForm({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "" });
+      setForm({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "", email: "" });
       await load();
     } catch (e: any) {
       setError(e.message || "Save failed");
@@ -123,12 +123,13 @@ export default function PatientsClient() {
       date_of_birth: p.date_of_birth?.slice(0, 10) || "",
       gender: p.gender || "male",
       contact_number: p.contact_number || "",
+      email: p.email || "",
     });
     setShowAdd(true);
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this patient? This will also delete history.")) return;
+    if (!confirm("Disable this patient?")) return;
     try {
       try {
         await deletePatient(id);
@@ -142,7 +143,17 @@ export default function PatientsClient() {
       }
       await load();
     } catch (e: any) {
-      setError(e.message || "Delete failed");
+      setError(e.message || "Disable failed");
+    }
+  }
+
+  async function handleEnable(id: string) {
+    if (!confirm("Enable this patient?")) return;
+    try {
+      await enablePatient(id);
+      await load();
+    } catch (e: any) {
+      setError(e.message || "Enable failed");
     }
   }
 
@@ -177,7 +188,7 @@ export default function PatientsClient() {
         <button
           onClick={() => {
             setEditing(null);
-            setForm({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "" });
+            setForm({ first_name: "", last_name: "", date_of_birth: "", gender: "male", contact_number: "", email: "" });
             setShowAdd(true);
           }}
           className="rounded-full px-6 py-2.5 text-sm font-semibold"
@@ -230,14 +241,15 @@ export default function PatientsClient() {
             </thead>
             <tbody>
               {filtered.map((p) => (
-                <tr key={p.id} style={{ borderBottom: "1px solid #3f3a52" }}>
+                <tr key={p.id} style={{ borderBottom: "1px solid #3f3a52", opacity: p.is_active === false ? 0.5 : 1 }}>
                   <td className="px-6 py-4">
                     <Link href={`/dashboard/patients/${p.id}`} className="hover:underline" style={{ color: "#ffffff", fontWeight: 600 }}>
                       {p.first_name} {p.last_name}
                     </Link>
-                    <div className="md:hidden text-xs" style={{ color: "#bcbac9" }}>{p.date_of_birth?.slice(0,10)} · {p.date_of_birth ? ageFromDob(p.date_of_birth) + "y" : "—"}</div>
+                    {p.is_active === false && <span className="ml-2 text-xs text-[#ff8a8a]">(Disabled)</span>}
+                    <div className="md:hidden text-xs" style={{ color: "#bcbac9" }}>{p.date_of_birth?.slice(0, 10)} · {p.date_of_birth ? ageFromDob(p.date_of_birth) + "y" : "—"}</div>
                   </td>
-                  <td className="px-6 py-4 hidden md:table-cell" style={{ color: "#bcbac9" }}>{p.date_of_birth?.slice(0,10)} · {p.date_of_birth ? ageFromDob(p.date_of_birth) + "y" : "—"}</td>
+                  <td className="px-6 py-4 hidden md:table-cell" style={{ color: "#bcbac9" }}>{p.date_of_birth?.slice(0, 10)} · {p.date_of_birth ? ageFromDob(p.date_of_birth) + "y" : "—"}</td>
                   <td className="px-6 py-4 hidden sm:table-cell" style={{ color: "#bcbac9" }}>{p.gender}</td>
                   <td className="px-6 py-4" style={{ color: "#bcbac9" }}>{p.contact_number || "—"}</td>
                   <td className="px-6 py-4">
@@ -248,9 +260,15 @@ export default function PatientsClient() {
                       <button onClick={() => openEdit(p)} className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "#c9b4fa", color: "#c9b4fa" }}>
                         Edit
                       </button>
-                      <button onClick={() => handleDelete(p.id)} className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "#ff8a8a", color: "#ff8a8a" }}>
-                        Delete
-                      </button>
+                      {p.is_active === false ? (
+                        <button onClick={() => handleEnable(p.id)} className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "#7ee8c6", color: "#7ee8c6" }}>
+                          Enable
+                        </button>
+                      ) : (
+                        <button onClick={() => handleDelete(p.id)} className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "#ff8a8a", color: "#ff8a8a" }}>
+                          Disable
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -289,9 +307,15 @@ export default function PatientsClient() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Contact number</label>
-                <input value={form.contact_number} onChange={(e) => setForm({ ...form, contact_number: e.target.value })} placeholder="+91…" className="mt-2 w-full rounded-md border bg-black px-4 py-2.5 text-sm outline-none" style={{ borderColor: "#3f3a52", color: "#fff" }} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Contact number</label>
+                  <input value={form.contact_number} onChange={(e) => setForm({ ...form, contact_number: e.target.value })} placeholder="+91…" className="mt-2 w-full rounded-md border bg-black px-4 py-2.5 text-sm outline-none" style={{ borderColor: "#3f3a52", color: "#fff" }} />
+                </div>
+                <div>
+                  <label className="text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Email address</label>
+                  <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="patient@example.com" className="mt-2 w-full rounded-md border bg-black px-4 py-2.5 text-sm outline-none" style={{ borderColor: "#3f3a52", color: "#fff" }} />
+                </div>
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => { setShowAdd(false); setEditing(null); }} className="rounded-full border px-5 py-2 text-sm font-semibold" style={{ borderColor: "#3f3a52", color: "#bcbac9" }}>Cancel</button>

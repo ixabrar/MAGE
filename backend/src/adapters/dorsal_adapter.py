@@ -1,7 +1,7 @@
 """
 Dorsal hand model adapter — real ResNet18 + mock fallback.
 
-Loads resnet18_consistent_age_best.pth (128M) from backend/src/models/
+Loads resnet18_consistent_age_best.pth from backend/src/models/
 if available and torch is installed; otherwise falls back to deterministic
 mock dorsal model so the service stays up in dev/CI without torch.
 """
@@ -10,6 +10,7 @@ from typing import Dict, Optional
 from pathlib import Path
 import sys
 import os
+
 # Ensure torch threading doesn't deadlock in async context
 os.environ.setdefault("KMP_AFFINITY", "disabled")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -18,308 +19,567 @@ from schemas.fusion import ModelPrediction
 
 try:
     import torch
+
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
 except Exception:
     pass
 
+
 # ---------------------------------------------------------------------------
 # Lazy model singleton
 # ---------------------------------------------------------------------------
+
 _model = None
 _model_meta = {}  # {num_classes, is_regression}
 _device = "cpu"
 
+
 def _try_load_real_model():
     global _model, _model_meta
+
     if _model is not None:
         return _model
 
     try:
         import torch
-        import torch.nn as nn
-        from torchvision import models
-        from PIL import Image
     except Exception as e:
-        # torch not installed in this env — fallback to mock
         print(f"[dorsal_adapter] torch not available ({e}), using mock")
         return None
 
-    # Resolve model path — repo root or backend/src/models
-    candidates = [
-        Path(__file__).resolve().parents[2] / "models" / "resnet18_consistent_age_best.pth",  # backend/src/models
-        Path(__file__).resolve().parents[2] / "resnet18_consistent_age_best.pth",  # backend/src/resnet18...
-        Path(__file__).resolve().parents[3] / "resnet18_consistent_age_best.pth",  # repo root
-        Path(__file__).resolve().parents[3] / "backend" / "src" / "models" / "resnet18_consistent_age_best.pth",
-    ]
-    ckpt_path = next((p for p in candidates if p.exists()), None)
-    if ckpt_path is None:
-        print(f"[dorsal_adapter] model file not found in {candidates}, using mock")
+    model_root = Path(__file__).resolve().parents[1] / "models"
+
+    model_file = model_root / "model_consistent_age.py"
+
+    # The directory may exist because the original checkpoint was copied
+    # there in sharded format. We should NOT try torch.load() on the directory.
+    ckpt_dir = model_root / "resnet18_consistent_age_best"
+
+    # This is the actual usable checkpoint file.
+    ckpt_file = model_root / "resnet18_consistent_age_best.pth"
+
+    # Optional fallback if the .zip file exists.
+    ckpt_zip = model_root / "resnet18_consistent_age_best.pth.zip"
+
+    # We need the model definition plus a real checkpoint.
+    if not model_file.exists():
+        print(
+            f"[dorsal_adapter] model class missing under {model_root}, "
+            "using mock"
+        )
         return None
+
+    if not (
+        (ckpt_file.exists() and ckpt_file.is_file())
+        or (ckpt_zip.exists() and ckpt_zip.is_file())
+    ):
+        print(
+            f"[dorsal_adapter] real checkpoint missing under {model_root}, "
+            "using mock"
+        )
+        return None
+
+    # -----------------------------------------------------------------------
+    # Import trained model class
+    # -----------------------------------------------------------------------
 
     try:
-        ckpt = torch.load(str(ckpt_path), map_location="cpu")
-        # Unwrap — this model uses 'model_state_dict' (see config)
-        state = ckpt
-        if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
-            state = ckpt["model_state_dict"]
-        elif isinstance(ckpt, dict) and "state_dict" in ckpt:
-            state = ckpt["state_dict"]
-        elif isinstance(ckpt, dict) and "model" in ckpt and isinstance(ckpt["model"], dict):
-            state = ckpt["model"]
-        config = ckpt.get("config") if isinstance(ckpt, dict) else None
+        import importlib.util
 
-        # Strip 'module.' prefix (DataParallel) and map custom heads
-        clean_state = {}
-        for k, v in state.items() if isinstance(state, dict) else []:
-            nk = k[7:] if k.startswith("module.") else k
-            # Map backbone.* -> * and age_distribution_head -> fc
-            if nk.startswith("backbone."):
-                nk = nk[len("backbone."):]
-            if nk.startswith("age_distribution_head."):
-                nk = nk.replace("age_distribution_head.", "fc.")
-            clean_state[nk] = v
-        # Remove non-parameter entries like representative_ages
-        clean_state.pop("representative_ages", None)
-        if clean_state:
-            state = clean_state
-            print(f"[dorsal_adapter] mapped keys sample {list(state.keys())[:5]} fc present {'fc.weight' in state} fc shape {state.get('fc.weight').shape if 'fc.weight' in state else 'n/a'}")
+        spec = importlib.util.spec_from_file_location(
+            "model_consistent_age_local",
+            str(model_file),
+        )
 
-        # Infer num_classes from fc.weight shape
-        num_classes = None
-        for key in ["fc.weight", "classifier.weight", "head.weight"]:
-            if key in state:
-                num_classes = state[key].shape[0]
-                break
-        if num_classes is None:
-            # Try any weight with shape [*,512]
-            for k, v in state.items():
-                try:
-                    if hasattr(v, "shape") and len(v.shape) == 2 and v.shape[1] == 512:
-                        num_classes = v.shape[0]
-                        break
-                except Exception:
-                    continue
-        if num_classes is None:
-            num_classes = 1  # assume regression
+        if spec is None or spec.loader is None:
+            raise ImportError(
+                f"Could not create import spec for {model_file}"
+            )
 
-        is_regression = (num_classes == 1)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
 
-        # Build ResNet18
-        m = models.resnet18(weights=None)
-        if is_regression:
-            m.fc = nn.Linear(512, 1)
-        else:
-            m.fc = nn.Linear(512, num_classes)
+        ResNet18ConsistentAge = module.ResNet18ConsistentAge
 
-        # Load with strict=False to allow minor mismatches
-        try:
-            m.load_state_dict(state, strict=False)
-        except Exception as e:
-            print(f"[dorsal_adapter] load_state_dict strict=False warning: {e}")
-            # Try strict load for debugging
-            missing, unexpected = m.load_state_dict(state, strict=False)
-            print(f" missing {len(missing)} unexpected {len(unexpected)}")
-
-        m.eval()
-        m.to(_device)
-        # keep config for correct age formula
-        _model = m
-        _model_meta = {"num_classes": num_classes, "is_regression": is_regression, "ckpt_path": str(ckpt_path), "config": config if 'config' in locals() else None}
-        print(f"[dorsal_adapter] loaded {ckpt_path} num_classes={num_classes} regression={is_regression} config={_model_meta.get('config', {}).get('age_formula') if _model_meta.get('config') else 'n/a'}")
-        return _model
     except Exception as e:
-        print(f"[dorsal_adapter] failed to load real model ({e}), using mock")
-        import traceback; traceback.print_exc()
+        print(
+            f"[dorsal_adapter] failed to import real model class "
+            f"({e}), using mock"
+        )
+        import traceback
+
+        traceback.print_exc()
+        return None
+
+    # -----------------------------------------------------------------------
+    # Load checkpoint
+    # -----------------------------------------------------------------------
+
+    try:
+        load_path = None
+
+        # IMPORTANT:
+        # Prefer the actual .pth FILE.
+        # Do not attempt torch.load() on the checkpoint directory.
+        if ckpt_file.exists() and ckpt_file.is_file():
+            load_path = ckpt_file
+
+        elif ckpt_zip.exists() and ckpt_zip.is_file():
+            load_path = ckpt_zip
+
+        if load_path is None:
+            raise FileNotFoundError(
+                f"Real Dorsal checkpoint not found: {ckpt_file}"
+            )
+
+        print(
+            f"[dorsal_adapter] loading checkpoint from {load_path}"
+        )
+
+        ckpt = torch.load(
+            str(load_path),
+            map_location="cpu",
+            weights_only=False,
+        )
+
+        # The trained checkpoint contains:
+        # epoch
+        # model_state_dict
+        # optimizer_state_dict
+        # best_val_mae
+        # config
+
+        state_dict = ckpt.get(
+            "model_state_dict",
+            ckpt,
+        )
+
+        config = (
+            ckpt.get("config")
+            if isinstance(ckpt, dict)
+            else None
+        )
+
+        # -------------------------------------------------------------------
+        # Representative ages
+        # -------------------------------------------------------------------
+        #
+        # The checkpoint stores representative_ages as a dictionary:
+        #
+        # {
+        #     "18-25": ...,
+        #     "26-35": ...,
+        #     "36-45": ...,
+        #     "46+": ...
+        # }
+        #
+        # The model expects an ordered sequence of numeric values.
+        # Use the model's AGE_BIN_LABELS ordering.
+        # -------------------------------------------------------------------
+
+        if (
+            isinstance(config, dict)
+            and "representative_ages" in config
+        ):
+            representative_ages_config = config["representative_ages"]
+
+            if isinstance(representative_ages_config, dict):
+                labels = getattr(
+                    ResNet18ConsistentAge,
+                    "AGE_BIN_LABELS",
+                    ("18-25", "26-35", "36-45", "46+"),
+                )
+
+                rep = [
+                    representative_ages_config[label]
+                    for label in labels
+                ]
+
+            else:
+                # Already a list/tuple/etc.
+                rep = representative_ages_config
+
+        else:
+            raise ValueError(
+                "Checkpoint config does not contain "
+                "'representative_ages'"
+            )
+
+        print(
+            f"[dorsal_adapter] representative ages: {rep}"
+        )
+
+        # -------------------------------------------------------------------
+        # Build model and load trained weights
+        # -------------------------------------------------------------------
+
+        model = ResNet18ConsistentAge(
+            representative_ages=rep
+        ).to(_device).eval()
+
+        model.load_state_dict(state_dict)
+
+        _model = model
+
+        _model_meta = {
+            "ckpt_path": str(load_path),
+            "config": config,
+            "class_path": str(model_file),
+        }
+
+        print(
+            f"[dorsal_adapter] loaded real model from {load_path}"
+        )
+
+        return _model
+
+    except Exception as e:
+        print(
+            f"[dorsal_adapter] failed to load real model "
+            f"({e}), using mock"
+        )
+
+        import traceback
+
+        traceback.print_exc()
+
         return None
 
 
-def _age_to_bins(predicted_age: float):
-    """Convert single age (regression) to 4-bin distribution for ModelPrediction contract."""
-    bins = ["18-25", "26-35", "36-45", "46+"]
-    # Centres must match training config (46+ = 70)
-    centres = {"18-25": 21.5, "26-35": 30.5, "36-45": 40.5, "46+": 70.0}
-    # Use softmax over negative distance
-    import math
-    scores = {}
-    for b in bins:
-        d = abs(predicted_age - centres[b])
-        # sigma 8 gives smooth falloff
-        scores[b] = math.exp(-0.5 * (d / 8) ** 2)
-    total = sum(scores.values())
-    probs = {k: round(v / total, 3) for k, v in scores.items()}
-    # Renormalize to exactly 1.0
-    s = sum(probs.values())
-    if abs(s - 1.0) > 1e-6:
-        # adjust largest
-        mk = max(probs, key=lambda k: probs[k])
-        probs[mk] = round(probs[mk] + (1.0 - s), 3)
-    return probs
+# ---------------------------------------------------------------------------
+# Image preprocessing
+# ---------------------------------------------------------------------------
 
-def _bins_from_logits(logits, bins=None):
-    """Convert classification logits (4 or N) to age_bins dict."""
-    import torch.nn.functional as F
-    import torch
-    if bins is None:
-        bins = ["18-25", "26-35", "36-45", "46+"]
-    probs = F.softmax(logits, dim=-1).detach().cpu().numpy()
-    # logits may be [num_classes] or [[num_classes]]
-    if len(probs.shape) == 2:
-        probs = probs[0]
-    # If num_classes != 4, map to 4 by grouping (e.g. 101 -> 4 bins)
-    if len(probs) == 4:
-        return {b: float(round(p, 3)) for b, p in zip(bins, probs)}
-    elif len(probs) > 4:
-        # Group: 18-25 (0-25), 26-35 (26-35), 36-45 (36-45), 46+ (46-100)
-        # Assume logits correspond to ages 0..100
-        import numpy as np
-        ages = list(range(len(probs)))
-        grouped = {b: 0.0 for b in bins}
-        for age, p in zip(ages, probs):
-            if age <= 25:
-                grouped["18-25"] += float(p)
-            elif age <= 35:
-                grouped["26-35"] += float(p)
-            elif age <= 45:
-                grouped["36-45"] += float(p)
-            else:
-                grouped["46+"] += float(p)
-        # round
-        return {k: round(v, 3) for k, v in grouped.items()}
-    else:
-        # Fallback: uniform
-        return {b: 0.25 for b in bins}
 
 def _preprocess_image(image_path_or_bytes):
-    """Preprocess image to tensor 1x3x224x224 ImageNet normalized."""
+    """
+    Preprocess image to tensor 1x3x224x224 ImageNet normalized.
+    """
+
     from PIL import Image
     import torchvision.transforms as T
 
     if isinstance(image_path_or_bytes, Image.Image):
         img = image_path_or_bytes.convert("RGB")
-    elif isinstance(image_path_or_bytes, (bytes, bytearray)):
+    elif isinstance(
+        image_path_or_bytes,
+        (bytes, bytearray),
+    ):
         import io
-        img = Image.open(io.BytesIO(image_path_or_bytes)).convert("RGB")
+
+        img = Image.open(
+            io.BytesIO(image_path_or_bytes)
+        ).convert("RGB")
+
     elif isinstance(image_path_or_bytes, (str, Path)):
-        img = Image.open(str(image_path_or_bytes)).convert("RGB")
+        img = Image.open(
+            str(image_path_or_bytes)
+        ).convert("RGB")
     else:
-        # Assume file-like
         try:
-            img = Image.open(image_path_or_bytes).convert("RGB")
+            img = Image.open(
+                image_path_or_bytes
+            ).convert("RGB")
+
         except Exception:
-            raise ValueError("Unsupported image input type")
+            raise ValueError(
+                "Unsupported image input type"
+            )
 
-    transform = T.Compose([
-        T.Resize(256),
-        T.CenterCrop(224),
-        T.ToTensor(),
-        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-    return transform(img).unsqueeze(0)  # 1x3x224x224
+    transform = T.Compose(
+        [
+            T.Resize(256),
+            T.CenterCrop(224),
+            T.ToTensor(),
+            T.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
+            ),
+        ]
+    )
+
+    return transform(img).unsqueeze(0)
 
 
-def predict_dorsal_from_image(image_input) -> ModelPrediction:
+# ---------------------------------------------------------------------------
+# Real Dorsal inference
+# ---------------------------------------------------------------------------
+
+
+def predict_dorsal_from_image(
+    image_input,
+) -> ModelPrediction:
     """
     Core inference entry — accepts file path, bytes, or PIL buffer.
-    Returns ModelPrediction with model_name="dorsal" (contract for ARM/PFM).
-    Falls back to mock if real model unavailable.
+
+    Returns ModelPrediction with model_name="dorsal"
+    for the ARM/PFM fusion contract.
+
+    Falls back to mock if the real model is unavailable.
     """
+
     model = _try_load_real_model()
+
     if model is None:
-        # Mock fallback
-        fusion_layer_path = Path(__file__).resolve().parents[3] / "fusion-layer"
-        sys.path.insert(0, str(fusion_layer_path))
+        fusion_layer_path = (
+            Path(__file__).resolve().parents[3]
+            / "fusion-layer"
+        )
+
+        sys.path.insert(
+            0,
+            str(fusion_layer_path),
+        )
+
         from mock_models.dorsal_mock import dorsal_mock
+
         return dorsal_mock("middle")
 
     try:
         import torch
-        tensor = _preprocess_image(image_input)
-        with torch.no_grad():
-            out = model(tensor.to(_device))
-            # out shape: [1, num_classes] or [1,1]
-            out = out.squeeze(0)
-            meta = _model_meta
-            if meta.get("is_regression"):
-                # out is [1] or scalar
-                pred_age = float(out.item() if out.numel() == 1 else out[0].item())
-                # Clamp to plausible range
-                pred_age = max(0.0, min(120.0, pred_age))
-                bins = _age_to_bins(pred_age)
-                conf = 0.85  # regression confidence heuristic
-                return ModelPrediction(
-                    model_name="dorsal",
-                    predicted_age=round(pred_age, 1),
-                    confidence=conf,
-                    age_bins=bins,
-                )
-            else:
-                # Classification — per config: 4 bins with representative ages 21.5,30.5,40.5,70.0 and confidence = max(prob)
-                import torch.nn.functional as F
-                logits = out.unsqueeze(0) if out.dim() == 1 else out
-                probs = F.softmax(logits, dim=-1)
-                num_classes = meta["num_classes"]
-                cfg = meta.get("config") or {}
-                rep = cfg.get("representative_ages") if cfg else None
-                if num_classes == 4:
-                    centres = [rep.get("18-25", 21.5) if rep else 21.5, rep.get("26-35", 30.5) if rep else 30.5, rep.get("36-45", 40.5) if rep else 40.5, rep.get("46+", 70.0) if rep else 70.0]
-                    pred_age = float((probs[0].cpu().numpy() * __import__("numpy").array(centres)).sum())
-                    bins = _bins_from_logits(logits[0])
-                    conf = float(probs[0].max().item())
-                else:
-                    pred_age = float((probs[0].cpu().numpy() * __import__("numpy").arange(num_classes)).sum())
-                    bins = _bins_from_logits(logits[0])
-                    conf = float(probs[0].max().item())
-                return ModelPrediction(
-                    model_name="dorsal",
-                    predicted_age=round(max(0.0, min(120.0, pred_age)), 1),
-                    confidence=round(max(0.0, min(1.0, conf)), 3),
-                    age_bins=bins,
-                )
+
+        tensor = _preprocess_image(
+            image_input
+        ).to(_device)
+
+        with torch.inference_mode():
+            output = model.predict(tensor)
+
+        predicted_age = float(
+            output["predicted_age"][0, 0].cpu()
+        )
+
+        confidence = float(
+            output["confidence"][0].cpu()
+        )
+
+        probs = (
+            output["age_bin_probabilities"][0]
+            .cpu()
+            .tolist()
+        )
+
+        labels = getattr(
+            model,
+            "AGE_BIN_LABELS",
+            ("18-25", "26-35", "36-45", "46+"),
+        )
+
+        age_bins = {
+            str(label): float(prob)
+            for label, prob in zip(labels, probs)
+        }
+
+        feature_dim = int(
+            output["features"].shape[-1]
+        )
+
+        print(
+            f"[dorsal_adapter] real inference "
+            f"age={predicted_age:.1f} "
+            f"confidence={confidence:.3f} "
+            f"feature_dim={feature_dim}"
+        )
+
+        return ModelPrediction(
+            model_name="dorsal",
+            predicted_age=round(
+                max(
+                    0.0,
+                    min(120.0, predicted_age),
+                ),
+                1,
+            ),
+            confidence=round(
+                max(
+                    0.0,
+                    min(1.0, confidence),
+                ),
+                3,
+            ),
+            age_bins=age_bins,
+        )
+
     except Exception as e:
-        print(f"[dorsal_adapter] inference failed ({e}), fallback to mock")
-        import traceback; traceback.print_exc()
-        fusion_layer_path = Path(__file__).resolve().parents[3] / "fusion-layer"
-        sys.path.insert(0, str(fusion_layer_path))
+        print(
+            f"[dorsal_adapter] inference failed "
+            f"({e}), fallback to mock"
+        )
+
+        import traceback
+
+        traceback.print_exc()
+
+        fusion_layer_path = (
+            Path(__file__).resolve().parents[3]
+            / "fusion-layer"
+        )
+
+        sys.path.insert(
+            0,
+            str(fusion_layer_path),
+        )
+
         from mock_models.dorsal_mock import dorsal_mock
+
         return dorsal_mock("middle")
 
 
-def run_dorsal_adapter(input_ref: Dict[str, Optional[str]]) -> ModelPrediction:
+def predict_dorsal_with_explanation(image_input):
+    """Return the dorsal prediction plus original and Grad-CAM images."""
+    prediction = predict_dorsal_from_image(image_input)
+    model = _try_load_real_model()
+    if model is None:
+        return prediction, None, None
+
+    try:
+        import base64
+        import io
+        import numpy as np
+        import torch
+        from PIL import Image, ImageFilter
+
+        activations = []
+        gradients = []
+        target_layer = model.backbone.layer4[-1]
+        forward_handle = target_layer.register_forward_hook(
+            lambda _module, _inputs, output: activations.append(output)
+        )
+        backward_handle = target_layer.register_full_backward_hook(
+            lambda _module, _grad_input, grad_output: gradients.append(grad_output[0])
+        )
+
+        tensor = _preprocess_image(image_input).to(_device)
+        model.zero_grad(set_to_none=True)
+        output = model(tensor)
+        target_index = int(output["age_bin_probabilities"].argmax(dim=1).item())
+        output["age_distribution_logits"][0, target_index].backward()
+
+        forward_handle.remove()
+        backward_handle.remove()
+
+        activation = activations[0][0]
+        gradient = gradients[0][0]
+        weights = gradient.mean(dim=(1, 2), keepdim=True)
+        cam = (weights * activation).sum(dim=0).relu()
+        cam = cam / cam.max().clamp_min(1e-8)
+        cam_image = Image.fromarray((cam.detach().cpu().numpy() * 255).astype(np.uint8))
+        cam_image = cam_image.resize((224, 224), Image.Resampling.BILINEAR)
+        cam_image = cam_image.filter(ImageFilter.GaussianBlur(radius=1.1))
+        heat = np.asarray(cam_image, dtype=np.float32) / 255.0
+        low, high = np.percentile(heat, (5, 99.5))
+        heat = np.clip((heat - low) / max(high - low, 1e-6), 0, 1)
+
+        image_source = io.BytesIO(image_input) if isinstance(image_input, (bytes, bytearray)) else image_input
+        base = Image.open(image_source).convert("RGB")
+        resize_scale = 256 / min(base.size)
+        resized = base.resize((round(base.width * resize_scale), round(base.height * resize_scale)), Image.Resampling.LANCZOS)
+        left = (resized.width - 224) // 2
+        top = (resized.height - 224) // 2
+        base = resized.crop((left, top, left + 224, top + 224))
+        base_array = np.asarray(base, dtype=np.float32)
+        red = np.clip(1.5 - np.abs(4 * heat - 3), 0, 1)
+        green = np.clip(1.5 - np.abs(4 * heat - 2), 0, 1)
+        blue = np.clip(1.5 - np.abs(4 * heat - 1), 0, 1)
+        overlay = np.stack((red, green, blue), axis=-1) * 255
+        alpha = (0.18 + 0.68 * heat)[..., None]
+        blended = (base_array * (1 - alpha) + overlay * alpha).clip(0, 255).astype(np.uint8)
+        original_buffer = io.BytesIO()
+        base.save(original_buffer, format="JPEG", quality=88)
+        result = Image.fromarray(blended)
+        buffer = io.BytesIO()
+        result.save(buffer, format="JPEG", quality=88)
+        return (
+            prediction,
+            "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii"),
+            "data:image/jpeg;base64," + base64.b64encode(original_buffer.getvalue()).decode("ascii"),
+        )
+    except Exception as error:
+        print(f"[dorsal_adapter] Grad-CAM failed ({error})")
+        return prediction, None, None
+
+
+# ---------------------------------------------------------------------------
+# Assessment service adapter entry
+# ---------------------------------------------------------------------------
+
+
+def run_dorsal_adapter(
+    input_ref: Dict[str, Optional[str]],
+) -> ModelPrediction:
     """
     Adapter entry used by assessment_service.py.
 
     Supports:
-      - {"file_url": "..."} legacy mock path (filename only)
-      - {"file_path": "/tmp/..."} new upload path
-      - {"image_bytes": b"..."} raw bytes (not JSON-serializable, used internally)
+      - {"file_url": "..."} legacy mock path
+      - {"file_path": "/tmp/..."} uploaded image path
+      - {"image_bytes": b"..."} raw bytes
 
-    If a real image is available it runs ResNet18; otherwise mock.
+    If a real image is available it runs ResNet18;
+    otherwise it uses the mock.
     """
-    # New keys take precedence
+
+    # New keys take precedence.
+
     if input_ref.get("file_path"):
-        return predict_dorsal_from_image(input_ref["file_path"])
+        return predict_dorsal_from_image(
+            input_ref["file_path"]
+        )
+
     if input_ref.get("image_bytes"):
-        return predict_dorsal_from_image(input_ref["image_bytes"])  # type: ignore
+        return predict_dorsal_from_image(
+            input_ref["image_bytes"]
+        )
 
     file_url = input_ref.get("file_url")
+
     if not file_url:
-        raise ValueError("Dorsal hand input missing file reference")
+        raise ValueError(
+            "Dorsal hand input missing file reference"
+        )
 
-    # If file_url looks like a real path on disk, try it
+    # If file_url looks like a real path on disk,
+    # try it directly.
+
     maybe_path = Path(file_url)
-    if maybe_path.exists() and maybe_path.is_file():
-        return predict_dorsal_from_image(str(maybe_path))
 
-    # Also try backend uploads temp dir
+    if (
+        maybe_path.exists()
+        and maybe_path.is_file()
+    ):
+        return predict_dorsal_from_image(
+            str(maybe_path)
+        )
+
+    # Also try backend uploads temp directory.
+
     alt = Path("/tmp") / Path(file_url).name
-    if alt.exists():
-        return predict_dorsal_from_image(str(alt))
 
-    # Fallback: legacy mock (filename only, no bytes)
-    # Keep behaviour for public assessment without real upload
-    print(f"[dorsal_adapter] no real image found for file_url={file_url}, using mock")
-    fusion_layer_path = Path(__file__).resolve().parents[3] / "fusion-layer"
-    sys.path.insert(0, str(fusion_layer_path))
+    if (
+        alt.exists()
+        and alt.is_file()
+    ):
+        return predict_dorsal_from_image(
+            str(alt)
+        )
+
+    # Legacy fallback.
+
+    print(
+        f"[dorsal_adapter] no real image found "
+        f"for file_url={file_url}, using mock"
+    )
+
+    fusion_layer_path = (
+        Path(__file__).resolve().parents[3]
+        / "fusion-layer"
+    )
+
+    sys.path.insert(
+        0,
+        str(fusion_layer_path),
+    )
+
     from mock_models.dorsal_mock import dorsal_mock
+
     return dorsal_mock("middle")

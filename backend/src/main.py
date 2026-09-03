@@ -25,6 +25,8 @@ from routes import auth
 from routes import patients
 from routes import admin_doctor
 from routes import dorsal_hand
+from routes import dorsal_tracking
+from routes import blood_report
 
 
 app = FastAPI(title="MAGE Backend", version="0.1.0")
@@ -42,6 +44,8 @@ app.include_router(auth.router)
 app.include_router(patients.router)
 app.include_router(admin_doctor.router)
 app.include_router(dorsal_hand.router)
+app.include_router(dorsal_tracking.router)
+app.include_router(blood_report.router)
 
 @app.on_event("startup")
 async def preload_models():
@@ -60,9 +64,6 @@ async def preload_models():
         print("[startup] dorsal model preloaded successfully")
     except Exception as e:
         print(f"[startup] dorsal preload failed: {e}")
-
-
-
 
 
 @app.get("/health")

@@ -35,6 +35,7 @@ const DEMO_ACCOUNTS = [
 function AuthSignInInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const requestedRole = searchParams.get("role"); // doctor | admin | null
   const initialMode = searchParams.get("mode") === "signup" ? "signup" : "login";
 
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
@@ -137,7 +138,7 @@ function AuthSignInInner() {
       } else if (role === "admin" || role === "system_admin" || role === "organization_admin") {
         window.location.href = "/dashboard/users";
       } else {
-        window.location.href = "/assessment";
+        window.location.href = "/";
       }
     } catch {
       setError("An unexpected error occurred. Please try again.");

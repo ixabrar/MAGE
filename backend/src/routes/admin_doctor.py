@@ -1,4 +1,7 @@
 from fastapi import APIRouter, HTTPException
+import urllib.request
+import json
+import os
 
 from core.supabase import supabase_admin
 from schemas.doctor import DoctorCreate, DoctorUpdate, DoctorResponse
@@ -9,8 +12,22 @@ router = APIRouter(
     tags=["Admin Doctors"]
 )
 
-
-
+def fetch_user_details(user_id: str) -> dict:
+    try:
+        supabase_url = os.environ.get("SUPABASE_URL")
+        service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        if not supabase_url or not service_key:
+            return {}
+        url = f"{supabase_url}/auth/v1/admin/users/{user_id}"
+        req = urllib.request.Request(url, headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}"
+        })
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode())
+            return {"email": data.get("email"), "banned_until": data.get("banned_until")}
+    except Exception:
+        return {}
 
 
 @router.post("")
@@ -73,10 +90,6 @@ async def create_doctor(data: DoctorCreate):
         )
 
 
-# =========================
-# 2. GET ALL DOCTORS
-# =========================
-
 @router.get("")
 async def get_all_doctors():
 
@@ -92,22 +105,15 @@ async def get_all_doctors():
         doctors = []
 
         for doctor in response.data:
-
-            auth_response = (
-                supabase_admin
-                .auth.admin.get_user_by_id(doctor["id"])
-            )
-
-            email = None
-
-            if auth_response.user:
-                email = auth_response.user.email
+            details = fetch_user_details(doctor["id"])
+            is_active = not bool(details.get("banned_until"))
 
             doctors.append({
                 "id": doctor["id"],
-                "email": email,
+                "email": details.get("email"),
                 "full_name": doctor["full_name"],
-                "role": doctor["role"]
+                "role": doctor["role"],
+                "is_active": is_active
             })
 
         return {
@@ -121,9 +127,6 @@ async def get_all_doctors():
         )
 
 
-# =========================
-# 3. GET DOCTOR BY ID
-# =========================
 
 @router.get("/{doctor_id}")
 async def get_doctor_by_id(doctor_id: str):
@@ -146,23 +149,16 @@ async def get_doctor_by_id(doctor_id: str):
             )
 
         doctor = response.data
-
-        auth_response = (
-            supabase_admin
-            .auth.admin.get_user_by_id(doctor_id)
-        )
-
-        email = None
-
-        if auth_response.user:
-            email = auth_response.user.email
+        details = fetch_user_details(doctor_id)
+        is_active = not bool(details.get("banned_until"))
 
         return {
             "doctor": {
                 "id": doctor["id"],
-                "email": email,
+                "email": details.get("email"),
                 "full_name": doctor["full_name"],
-                "role": doctor["role"]
+                "role": doctor["role"],
+                "is_active": is_active
             }
         }
 
@@ -176,9 +172,6 @@ async def get_doctor_by_id(doctor_id: str):
         )
 
 
-# =========================
-# 4. UPDATE DOCTOR
-# =========================
 
 @router.put("/{doctor_id}")
 async def update_doctor(
@@ -250,9 +243,6 @@ async def update_doctor(
         )
 
 
-# =========================
-# 5. DELETE DOCTOR
-# =========================
 
 @router.delete("/{doctor_id}")
 async def delete_doctor(doctor_id: str):
@@ -275,14 +265,53 @@ async def delete_doctor(doctor_id: str):
                 detail="Doctor not found"
             )
 
-        # Soft delete Auth user
-        supabase_admin.auth.admin.delete_user(
+        supabase_admin.auth.admin.update_user_by_id(
             doctor_id,
-            should_soft_delete=True
+            {"ban_duration": "876000h"}
         )
 
         return {
             "message": "Doctor disabled successfully"
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+
+@router.post("/{doctor_id}/enable")
+async def enable_doctor(doctor_id: str):
+
+    try:
+        # Check doctor exists
+        response = (
+            supabase_admin
+            .table("profiles")
+            .select("id, role")
+            .eq("id", doctor_id)
+            .eq("role", "doctor")
+            .maybe_single()
+            .execute()
+        )
+
+        if not response.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Doctor not found"
+            )
+
+        # Enable Auth user by removing ban
+        supabase_admin.auth.admin.update_user_by_id(
+            doctor_id,
+            {"ban_duration": "none"}
+        )
+
+        return {
+            "message": "Doctor enabled successfully"
         }
 
     except HTTPException:

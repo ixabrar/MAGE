@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { getPatient, uploadReport, predictBioAge, predictBioAgePdf, addPatientHistory, type Patient, type ExtractedFeature, type BioAgePrediction, type BioAgePredictionRequest } from "@/lib/api";
+import { getPatient, uploadReport, predictBioAge, predictBioAgePdf, addPatientHistory, uploadHistoryPdf, viewHistoryPdf, emailReport, type Patient, type ExtractedFeature, type BioAgePrediction, type BioAgePredictionRequest } from "@/lib/api";
 import { mockFeaturesFromFile, mockBioAgePrediction, ageFromDob } from "@/lib/mockBioAge";
 import { mockGetPatient, mockAddHistory } from "@/lib/mockPatients";
 
@@ -18,10 +18,13 @@ export default function PatientDetailClient({ patientId }: { patientId: string }
   const [prediction, setPrediction] = useState<BioAgePrediction | null>(null);
   const [predicting, setPredicting] = useState(false);
   // real backend PDF
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [bioAgeForm, setBioAgeForm] = useState<BioAgePredictionRequest>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // reviews
   const [manualReview, setManualReview] = useState("");
@@ -141,23 +144,55 @@ export default function PatientDetailClient({ patientId }: { patientId: string }
     setPdfLoading(true);
     setError(null);
     try {
-      // build payload from form — include all 77 keys that are set, others omitted (backend treats missing as NaN)
       const payload: BioAgePredictionRequest = { ...bioAgeForm };
-      // ensure Gender is set from patient if not already
       if (payload.Gender === undefined && patient.gender) {
         payload.Gender = patient.gender.toLowerCase().startsWith("m") ? 1 : patient.gender.toLowerCase().startsWith("f") ? 0 : undefined;
       }
+      // First get real JSON prediction so frontend display == PDF (same payload, same model)
+      const { predictBioAgeJson } = await import("@/lib/api");
+      try {
+        const json = await predictBioAgeJson(patientId, payload);
+        const mapped: BioAgePrediction = {
+          chronological_age: json.chronological_age,
+          predicted_bio_age: json.predicted_bio_age,
+          bio_age_gap: json.bio_age_gap,
+          contributing_factors: (json.top_contributing_factors || []).map((f: any) => ({
+            feature: f.feature,
+            direction: f.impact > 0 ? "increases gap" : "decreases gap",
+            strength: Math.min(1, Math.abs(f.impact) / 2),
+          })),
+          ai_summary: `Real XGBoost: chrono ${json.chronological_age}, bio ${json.predicted_bio_age.toFixed(1)}, gap ${json.bio_age_gap > 0 ? "+" : ""}${json.bio_age_gap.toFixed(1)}. Top: ${(json.top_contributing_factors || []).map((f: any) => f.feature).join(", ") || "none"}.`,
+          recommendations: [],
+        };
+        setPrediction(mapped);
+      } catch (jsonErr) {
+        console.warn("JSON prediction failed, will still try PDF", jsonErr);
+      }
       const blob = await predictBioAgePdf(patientId, payload);
+      setPdfBlob(blob);
       const url = URL.createObjectURL(blob);
       setPdfUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return url;
       });
-      setSaveMsg("Official PDF report generated via XGBoost + SHAP (backend).");
+      setSaveMsg("Official PDF and frontend now share the same real XGBoost prediction.");
     } catch (e: any) {
       setError(e.message || "PDF generation failed — is the backend’s xgb_model.pkl and shap installed? Falling back to mock gap above.");
     } finally {
       setPdfLoading(false);
+    }
+  }
+
+  async function handleSendEmail() {
+    setSendingEmail(true);
+    setEmailMsg(null);
+    try {
+      const res = await emailReport(patientId);
+      setEmailMsg({ type: "success", text: res.message || "Email sent successfully!" });
+    } catch (e: any) {
+      setEmailMsg({ type: "error", text: e.message || "Failed to send email" });
+    } finally {
+      setSendingEmail(false);
     }
   }
 
@@ -175,13 +210,22 @@ export default function PatientDetailClient({ patientId }: { patientId: string }
       // If both exist, combine
       const finalRemarks = [manualReview.trim(), remarks.trim()].filter(Boolean).join("\n\n— Remarks: ");
       try {
-        await addPatientHistory(patientId, {
+        const rec = await addPatientHistory(patientId, {
           chronological_age: prediction.chronological_age,
           predicted_bio_age: prediction.predicted_bio_age,
           bio_age_gap: prediction.bio_age_gap,
           ai_summary: prediction.ai_summary,
           doctor_remarks: finalRemarks || combinedRemarks || null,
         });
+        
+        // Link the PDF to this history record if we generated one
+        if (pdfBlob) {
+          try {
+            await uploadHistoryPdf(rec.id, pdfBlob);
+          } catch (e) {
+            console.error("Failed to upload PDF for history link", e);
+          }
+        }
       } catch {
         // offline demo fallback — persist to local mock store + update UI
         const rec = mockAddHistory(patientId, {
@@ -279,6 +323,7 @@ export default function PatientDetailClient({ patientId }: { patientId: string }
                     <th className="px-4 py-3 text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#c9b4fa" }}>Chrono</th>
                     <th className="px-4 py-3 text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#c9b4fa" }}>Bio</th>
                     <th className="px-4 py-3 text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#c9b4fa" }}>Gap</th>
+                    <th className="px-4 py-3 text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#c9b4fa" }}>Report</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -289,6 +334,16 @@ export default function PatientDetailClient({ patientId }: { patientId: string }
                       <td className="px-4 py-3">{h.predicted_bio_age?.toFixed(1) ?? "—"}</td>
                       <td className="px-4 py-3" style={{ color: (h.bio_age_gap ?? 0) > 0 ? "#ff8a8a" : (h.bio_age_gap ?? 0) < 0 ? "#7ee8c6" : "#bcbac9" }}>
                         {h.bio_age_gap != null ? `${h.bio_age_gap > 0 ? "+" : ""}${h.bio_age_gap.toFixed(1)}` : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button 
+                          onClick={() => viewHistoryPdf(h.id).catch(e => alert(e.message))}
+                          className="rounded-full border px-3 py-1 text-xs transition-colors hover:bg-white/5" 
+                          style={{ borderColor: "#3f3a52", color: "#c9b4fa" }}
+                          title="View exact values for this assessment"
+                        >
+                          View PDF
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -520,18 +575,34 @@ export default function PatientDetailClient({ patientId }: { patientId: string }
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             onClick={handleGeneratePdf}
-            disabled={pdfLoading}
+            disabled={pdfLoading || !features}
             className="rounded-full px-6 py-2.5 text-sm font-semibold disabled:opacity-50"
             style={{ background: "#c9b4fa", color: "#1b1938", fontWeight: 700 }}
+            title={!features ? "Please upload a report first" : ""}
           >
             {pdfLoading ? "Generating PDF…" : "Generate official PDF report"}
           </button>
           {pdfUrl && (
-            <a href={pdfUrl} download={`bio_age_report_${patientId}.pdf`} className="rounded-full border px-6 py-2.5 text-sm font-semibold" style={{ borderColor: "#c9b4fa", color: "#c9b4fa" }}>
-              Download PDF
-            </a>
+            <>
+              <a href={pdfUrl} download={`bio_age_report_${patientId}.pdf`} className="rounded-full border px-6 py-2.5 text-sm font-semibold" style={{ borderColor: "#c9b4fa", color: "#c9b4fa" }}>
+                Download PDF
+              </a>
+              <button
+                onClick={handleSendEmail}
+                disabled={sendingEmail}
+                className="rounded-full border px-6 py-2.5 text-sm font-semibold disabled:opacity-50"
+                style={{ borderColor: "#7ee8c6", color: "#7ee8c6" }}
+              >
+                {sendingEmail ? "Sending..." : "Email to Patient"}
+              </button>
+            </>
           )}
         </div>
+        {emailMsg && (
+          <p className="mt-3 text-sm" style={{ color: emailMsg.type === "success" ? "#7ee8c6" : "#ff8a8a" }}>
+            {emailMsg.text}
+          </p>
+        )}
         {pdfUrl && (
           <div className="mt-4 overflow-hidden rounded-lg border" style={{ borderColor: "#3f3a52", height: "600px", background: "#fff" }}>
             <iframe src={pdfUrl} className="h-full w-full" title="Bio-age PDF preview" />
