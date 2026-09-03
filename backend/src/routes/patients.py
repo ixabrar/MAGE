@@ -82,18 +82,28 @@ async def update_patient(patient_id: UUID, patient: PatientUpdate, doctor_id: st
 
 
 @router.delete("/{patient_id}")
-async def delete_patient(patient_id: UUID, doctor_id: str = Depends(get_current_doctor_id)):
-    # Verify ownership first
+async def disable_patient(patient_id: UUID, doctor_id: str = Depends(get_current_doctor_id)):
+    # Verify ownership
     verify = supabase.table("patients").select("id").eq("id", str(patient_id)).eq("doctor_id", doctor_id).execute()
     if not verify.data:
         raise HTTPException(status_code=404, detail="Patient not found or unauthorized")
         
-    # First delete history (or rely on CASCADE in DB schema)
-    supabase.table("patient_history_records").delete().eq("patient_id", str(patient_id)).execute()
+    # Disable patient by updating is_active flag
+    response = supabase.table("patients").update({"is_active": False}).eq("id", str(patient_id)).execute()
     
-    # Then delete patient
-    response = supabase.table("patients").delete().eq("id", str(patient_id)).execute()
-    return {"message": "Patient deleted successfully"}
+    return {"message": "Patient disabled successfully"}
+
+@router.post("/{patient_id}/enable")
+async def enable_patient(patient_id: UUID, doctor_id: str = Depends(get_current_doctor_id)):
+    # Verify ownership
+    verify = supabase.table("patients").select("id").eq("id", str(patient_id)).eq("doctor_id", doctor_id).execute()
+    if not verify.data:
+        raise HTTPException(status_code=404, detail="Patient not found or unauthorized")
+        
+    # Enable patient by updating is_active flag
+    response = supabase.table("patients").update({"is_active": True}).eq("id", str(patient_id)).execute()
+    
+    return {"message": "Patient enabled successfully"}
 
 
 @router.post("/{patient_id}/history", response_model=PatientHistoryRecord)
