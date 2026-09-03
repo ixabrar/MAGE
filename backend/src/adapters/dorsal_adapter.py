@@ -424,6 +424,80 @@ def predict_dorsal_from_image(
         return dorsal_mock("middle")
 
 
+def predict_dorsal_with_explanation(image_input):
+    """Return the dorsal prediction plus original and Grad-CAM images."""
+    prediction = predict_dorsal_from_image(image_input)
+    model = _try_load_real_model()
+    if model is None:
+        return prediction, None, None
+
+    try:
+        import base64
+        import io
+        import numpy as np
+        import torch
+        from PIL import Image, ImageFilter
+
+        activations = []
+        gradients = []
+        target_layer = model.backbone.layer4[-1]
+        forward_handle = target_layer.register_forward_hook(
+            lambda _module, _inputs, output: activations.append(output)
+        )
+        backward_handle = target_layer.register_full_backward_hook(
+            lambda _module, _grad_input, grad_output: gradients.append(grad_output[0])
+        )
+
+        tensor = _preprocess_image(image_input).to(_device)
+        model.zero_grad(set_to_none=True)
+        output = model(tensor)
+        target_index = int(output["age_bin_probabilities"].argmax(dim=1).item())
+        output["age_distribution_logits"][0, target_index].backward()
+
+        forward_handle.remove()
+        backward_handle.remove()
+
+        activation = activations[0][0]
+        gradient = gradients[0][0]
+        weights = gradient.mean(dim=(1, 2), keepdim=True)
+        cam = (weights * activation).sum(dim=0).relu()
+        cam = cam / cam.max().clamp_min(1e-8)
+        cam_image = Image.fromarray((cam.detach().cpu().numpy() * 255).astype(np.uint8))
+        cam_image = cam_image.resize((224, 224), Image.Resampling.BILINEAR)
+        cam_image = cam_image.filter(ImageFilter.GaussianBlur(radius=1.1))
+        heat = np.asarray(cam_image, dtype=np.float32) / 255.0
+        low, high = np.percentile(heat, (5, 99.5))
+        heat = np.clip((heat - low) / max(high - low, 1e-6), 0, 1)
+
+        image_source = io.BytesIO(image_input) if isinstance(image_input, (bytes, bytearray)) else image_input
+        base = Image.open(image_source).convert("RGB")
+        resize_scale = 256 / min(base.size)
+        resized = base.resize((round(base.width * resize_scale), round(base.height * resize_scale)), Image.Resampling.LANCZOS)
+        left = (resized.width - 224) // 2
+        top = (resized.height - 224) // 2
+        base = resized.crop((left, top, left + 224, top + 224))
+        base_array = np.asarray(base, dtype=np.float32)
+        red = np.clip(1.5 - np.abs(4 * heat - 3), 0, 1)
+        green = np.clip(1.5 - np.abs(4 * heat - 2), 0, 1)
+        blue = np.clip(1.5 - np.abs(4 * heat - 1), 0, 1)
+        overlay = np.stack((red, green, blue), axis=-1) * 255
+        alpha = (0.18 + 0.68 * heat)[..., None]
+        blended = (base_array * (1 - alpha) + overlay * alpha).clip(0, 255).astype(np.uint8)
+        original_buffer = io.BytesIO()
+        base.save(original_buffer, format="JPEG", quality=88)
+        result = Image.fromarray(blended)
+        buffer = io.BytesIO()
+        result.save(buffer, format="JPEG", quality=88)
+        return (
+            prediction,
+            "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii"),
+            "data:image/jpeg;base64," + base64.b64encode(original_buffer.getvalue()).decode("ascii"),
+        )
+    except Exception as error:
+        print(f"[dorsal_adapter] Grad-CAM failed ({error})")
+        return prediction, None, None
+
+
 # ---------------------------------------------------------------------------
 # Assessment service adapter entry
 # ---------------------------------------------------------------------------
