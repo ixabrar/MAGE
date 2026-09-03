@@ -4,41 +4,25 @@ import type { UserRole } from "@/types";
 import { AppShellProvider } from "@/context/AppShellContext";
 import { DashboardShell } from "@/components/DashboardShell";
 
-// TEMP DEV BYPASS — AUTH DISABLED
-// TODO: RESTORE AUTH BEFORE PRODUCTION
-const DEV_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
-
-const DEV_USER = {
-  id: "dev_user",
-  email: "mage.dev@example.com",
-  name: "MAGE Development User",
-  role: "user",
-};
-
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  let session;
-  if (DEV_BYPASS) {
-    session = { user: DEV_USER };
-  } else {
-    session = await auth();
-  }
+  const session = await auth();
 
+  // 1. Unauthenticated users are strictly redirected to Sign In
   if (!session?.user) {
     redirect("/auth/signin");
   }
 
   const role = (session.user.role ?? "user") as UserRole;
 
-  // General user has no dashboard — role-based landing per spec
+  // 2. Standard public users have no dashboard access — send to landing
   if (role === "user") {
     redirect("/");
   }
 
-  // Admin trying to access doctor area handled by middleware, but double-check here
   return (
     <AppShellProvider role={role}>
       <DashboardShell user={session.user}>{children}</DashboardShell>
