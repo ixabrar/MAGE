@@ -20,6 +20,7 @@ class PatientUpdate(BaseModel):
     date_of_birth: Optional[date] = None
     gender: Optional[str] = None
     contact_number: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class PatientHistoryRecordCreate(BaseModel):
     chronological_age: Optional[int] = None
@@ -45,6 +46,7 @@ class PatientResponse(PatientBase):
     doctor_id: UUID
     created_at: datetime
     updated_at: datetime
+    is_active: bool = True
     history: Optional[List[PatientHistoryRecord]] = []
 
     class Config:
