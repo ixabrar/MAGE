@@ -30,7 +30,23 @@ const regions: Region[] = [
   },
 ];
 
-export default function DorsalHandExplainability() {
+export interface DorsalHandExplainabilityProps {
+  originalImageDataUrl?: string | null;
+  gradcamDataUrl?: string | null;
+  predictedAge?: number;
+  confidence?: number;
+  source?: string;
+  qualityMessage?: string | null;
+}
+
+export default function DorsalHandExplainability({
+  originalImageDataUrl,
+  gradcamDataUrl,
+  predictedAge,
+  confidence,
+  source,
+  qualityMessage,
+}: DorsalHandExplainabilityProps = {}) {
   const [activeRegion, setActiveRegion] = useState("knuckles");
   const active = regions.find((region) => region.id === activeRegion) ?? regions[0];
 
@@ -38,12 +54,43 @@ export default function DorsalHandExplainability() {
     <div className="mt-6 rounded-xl border p-5" style={{ borderColor: "#3f3a52", background: "#080712" }}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>Interactive hand map</p>
-          <p className="mt-2 text-sm" style={{ color: "#8f8aa4" }}>Select an area to see what the model looks at in the hand photo.</p>
+          <p className="text-xs uppercase font-bold tracking-wider text-[#c9b4fa]">
+            Dorsal Hand Explainability &amp; Biometrics
+          </p>
+          <p className="mt-1 text-xs text-[#8f8aa4]">
+            {predictedAge !== undefined
+              ? `Estimated: ${predictedAge.toFixed(1)} yrs (${((confidence ?? 0) * 100).toFixed(0)}% confidence)`
+              : "Select an area to see what the ResNet-18 model inspects in the dorsal hand photo."}
+          </p>
         </div>
-        <span className="rounded-full border px-2 py-1 text-[10px] uppercase" style={{ borderColor: "#3f3a52", color: "#8f8aa4", letterSpacing: "1px" }}>Back of hand</span>
+        <span className="rounded-full border border-[#3f3a52] px-2.5 py-1 text-[10px] uppercase font-semibold text-[#8f8aa4]">
+          Back of Hand
+        </span>
       </div>
 
+      {qualityMessage && (
+        <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-950/20 p-2.5 text-xs text-amber-200">
+          {qualityMessage}
+        </div>
+      )}
+
+      {/* Grad-CAM side-by-side if available */}
+      {gradcamDataUrl && (
+        <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-white/5 bg-black/40 p-3">
+          {originalImageDataUrl && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-[#8f8aa4] mb-1">Cropped ROI</p>
+              <img src={originalImageDataUrl} alt="Original Hand" className="h-32 w-full object-cover rounded border border-white/10" />
+            </div>
+          )}
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-[#c9b4fa] mb-1">Grad-CAM Heatmap</p>
+            <img src={gradcamDataUrl} alt="Grad-CAM Activation" className="h-32 w-full object-cover rounded border border-[#c9b4fa]/30" />
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Morphological Diagram */}
       <div className="mt-5 grid gap-5 md:grid-cols-[minmax(180px,0.9fr)_1fr] md:items-center">
         <div className="rounded-lg border p-3" style={{ borderColor: "#242136", background: "#0e0c1f" }}>
           <svg viewBox="0 0 320 280" role="img" aria-label="Interactive dorsal hand region diagram" className="mx-auto h-auto w-full max-w-[280px]">
@@ -81,16 +128,16 @@ export default function DorsalHandExplainability() {
               className="w-full rounded-lg border p-3 text-left transition-colors"
               style={{ borderColor: activeRegion === region.id ? "#c9b4fa" : "#3f3a52", background: activeRegion === region.id ? "rgba(201,180,250,.1)" : "transparent" }}
             >
-              <span className="flex items-center gap-2 text-sm font-semibold" style={{ color: "#ffffff" }}>
+              <span className="flex items-center gap-2 text-sm font-semibold text-white">
                 <span className="h-2 w-2 rounded-full" style={{ background: activeRegion === region.id ? "#f06c45" : "#f0a33a" }} />
                 {region.label}
               </span>
-              <span className="mt-1 block text-xs" style={{ color: "#8f8aa4" }}>{region.description}</span>
+              <span className="mt-1 block text-xs text-[#8f8aa4]">{region.description}</span>
             </button>
           ))}
           <div className="border-t pt-3" style={{ borderColor: "#242136" }}>
-            <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#8f8aa4" }}>What this means</p>
-            <p className="mt-1 text-sm font-semibold" style={{ color: "#f0a33a" }}>{active.label}</p>
+            <p className="text-[10px] uppercase font-semibold text-[#8f8aa4] tracking-wider">Active Focus</p>
+            <p className="mt-0.5 text-xs font-semibold text-[#f0a33a]">{active.label}</p>
           </div>
         </div>
       </div>

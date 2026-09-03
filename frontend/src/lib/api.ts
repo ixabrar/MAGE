@@ -71,8 +71,9 @@ export type PatientCreate = {
 export type Patient = PatientCreate & {
   id: string;
   doctor_id: string;
-  contact_number: string | null;
+  contact_number?: string | null;
   created_at: string;
+  updated_at?: string;
   is_active?: boolean;
   history: PatientHistoryRecord[];
 };
@@ -295,6 +296,8 @@ export async function predictDorsalHand(file: File): Promise<DorsalHandPredictio
   }
   return res.json();
 }
+
+export const predictDorsalHandWithExplanation = predictDorsalHand;
 
 export type DorsalHistory = {
   tracking_enabled: boolean;

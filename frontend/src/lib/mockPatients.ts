@@ -35,7 +35,7 @@ export function mockCreatePatient(data: { first_name: string; last_name: string;
     last_name: data.last_name,
     date_of_birth: data.date_of_birth,
     gender: data.gender,
-    contact_number: data.contact_number,
+    contact_number: data.contact_number || undefined,
     created_at: now,
     updated_at: now,
     history: [],

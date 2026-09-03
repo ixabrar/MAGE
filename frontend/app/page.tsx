@@ -219,32 +219,22 @@ export default function Home() {
                     Fusion
                   </a>
                   <a
-                    href="/auth/signin?role=doctor"
-                    className="rounded-full border px-5 py-2 text-sm font-semibold transition-colors duration-150 hover:border-white hover:bg-white/10"
+                    href="/auth/signin"
+                    className="rounded-full border border-[#3f3a52] px-5 py-2 text-sm font-semibold text-[#bcbac9] transition-all duration-150 hover:border-white hover:text-white"
                     style={{
                       fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                      letterSpacing: "0px",
-                      borderColor: "#3f3a52",
-                      color: "#bcbac9",
                     }}
                   >
-                    Doctor Login
+                    Sign In
                   </a>
                   <a
-                    href="/auth/signin?role=admin"
-                    className="rounded-full px-5 py-2 text-sm font-semibold transition-colors duration-150"
+                    href="/auth/signin?mode=signup"
+                    className="rounded-full bg-[#c9b4fa] px-5 py-2 text-sm font-bold text-[#1b1938] shadow-[0_0_15px_rgba(201,180,250,0.2)] transition-all duration-150 hover:bg-[#d4c2fb] hover:scale-105"
                     style={{
                       fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                      fontSize: "14px",
-                      fontWeight: 700,
-                      letterSpacing: "0px",
-                      background: "#c9b4fa",
-                      color: "#1b1938",
                     }}
                   >
-                    Admin Login
+                    Sign Up
                   </a>
                 </>
               )}
@@ -577,6 +567,111 @@ export default function Home() {
                     </motion.a>
                     <a href="/dashboard/assessments" className="inline-flex items-center justify-center whitespace-nowrap rounded-full border px-7 py-3.5 font-semibold leading-none text-white hover:bg-white/10" style={{ borderColor: "rgba(255,255,255,0.2)", fontSize: "16px" }}>
                       New assessment
+                    </a>
+                  </div>
+                </div>
+              )}
+              {isLoggedIn && !isDoctor && !isAdmin && (
+                <div className="mx-auto max-w-4xl text-center">
+                  <p
+                    data-animate
+                    className="inline-flex items-center rounded-full border px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-[#c9b4fa]"
+                    style={{
+                      borderColor: "rgba(201,180,250,0.35)",
+                      background: "rgba(201,180,250,0.08)",
+                    }}
+                  >
+                    <span className="mr-2 h-2 w-2 rounded-full bg-[#c9b4fa] animate-pulse" aria-hidden="true" />
+                    User Portal • Active Session
+                  </p>
+
+                  <h1
+                    data-animate
+                    className="mx-auto mt-6 max-w-3xl"
+                    style={{
+                      fontFamily: "var(--font-display, 'Rajdhani'), system-ui, sans-serif",
+                      fontSize: "clamp(36px, 6vw, 60px)",
+                      fontWeight: 600,
+                      lineHeight: 0.95,
+                      letterSpacing: "-0.02em",
+                      color: "#ffffff",
+                    }}
+                  >
+                    Welcome, {(session?.user as any)?.name || session?.user?.email?.split("@")[0] || "User"}
+                    <span className="block text-[#c9b4fa]">Track your biological age.</span>
+                    <span className="block text-[#bcbac9] text-[0.55em] font-normal mt-2">
+                      Multimodal AI inference powered by EfficientNet-B0 &amp; ResNet-18
+                    </span>
+                  </h1>
+
+                  <p
+                    data-animate
+                    className="mx-auto mt-6 max-w-2xl text-base sm:text-lg text-[#bcbac9] leading-relaxed"
+                    style={{ fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif" }}
+                  >
+                    You are signed in. Take a biological age assessment using live camera capture or photo upload, or explore multimodal fusion insights.
+                  </p>
+
+                  {/* Quick Action CTAs */}
+                  <div data-animate className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
+                    <motion.a
+                      href="/assessment"
+                      className="inline-flex items-center justify-center rounded-full px-7 py-3 text-base font-bold text-[#1b1938] bg-[#c9b4fa] shadow-[0_0_20px_rgba(201,180,250,0.3)] transition-all"
+                      whileHover={{ backgroundColor: "#d4c2fb", scale: 1.03 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      📷 Start New Assessment →
+                    </motion.a>
+                    <a
+                      href="/fusion"
+                      className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/5 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-white/10 hover:border-white/40"
+                    >
+                      ⚡ Explore Fusion Engine
+                    </a>
+                  </div>
+
+                  {/* Guided Next Steps Grid for Regular Users */}
+                  <div data-animate className="mx-auto mt-12 grid max-w-3xl gap-4 sm:grid-cols-2 text-left">
+                    <a
+                      href="/assessment?selected=face,dorsal_hand"
+                      className="group flex flex-col justify-between rounded-2xl border border-[#3f3a52] bg-[#0e0c1f] p-6 transition-all hover:border-[#c9b4fa]/60 hover:scale-[1.01]"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-2xl">◐ ✋</span>
+                          <span className="rounded-full bg-[#c9b4fa]/15 px-2.5 py-0.5 text-[11px] font-bold text-[#c9b4fa]">
+                            RECOMMENDED
+                          </span>
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold text-white">Full Dual-Modality Scan</h3>
+                        <p className="mt-1 text-xs text-[#bcbac9] leading-relaxed">
+                          Combine Face + Dorsal Hand inputs for the highest accuracy Bayesian fusion.
+                        </p>
+                      </div>
+                      <span className="mt-4 text-xs font-semibold text-[#c9b4fa] group-hover:underline">
+                        Launch Dual Assessment →
+                      </span>
+                    </a>
+
+                    <a
+                      href="/fusion"
+                      className="group flex flex-col justify-between rounded-2xl border border-[#3f3a52] bg-[#0e0c1f] p-6 transition-all hover:border-[#c9b4fa]/60 hover:scale-[1.01]"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-2xl">📊 🧬</span>
+                          <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-bold text-[#bcbac9]">
+                            ARM &amp; PFM
+                          </span>
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold text-white">Interactive Fusion Simulator</h3>
+                        <p className="mt-1 text-xs text-[#bcbac9] leading-relaxed">
+                          Simulate dynamic error cohorts, test reliability weighting, and inspect Bayesian math.
+                        </p>
+                      </div>
+                      <span className="mt-4 text-xs font-semibold text-[#c9b4fa] group-hover:underline">
+                        Open Simulator →
+                      </span>
                     </a>
                   </div>
                 </div>
