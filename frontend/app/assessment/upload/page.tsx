@@ -3,6 +3,7 @@
 import { Suspense, useMemo, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
+import DorsalHandExplainability from "@/components/DorsalHandExplainability";
 
 const steps = [
   { key: "face", label: "Face", hint: "Camera / Upload" },
@@ -53,13 +54,94 @@ function AssessmentUploadInner() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submittedAssessmentId, setSubmittedAssessmentId] = useState<string | null>(null);
-  const [dorsalResult, setDorsalResult] = useState<null | { predicted_age: number; confidence: number; age_bins: Record<string, number>; source: string }>(null);
+  const [dorsalResult, setDorsalResult] = useState<null | { predicted_age: number; confidence: number; age_bins: Record<string, number>; source: string; gradcam_data_url: string | null; original_image_data_url: string | null }>(null);
   const [dorsalLoading, setDorsalLoading] = useState(false);
+  const [dorsalPreviewUrl, setDorsalPreviewUrl] = useState<string | null>(null);
+  const [dorsalQualityError, setDorsalQualityError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dorsalPreviewUrlRef = useRef<string | null>(null);
 
-  const handleChange = (step: StepKey, file: File | null) => {
+  const handleChange = async (step: StepKey, file: File | null) => {
+    if (step === "dorsal_hand" && file) {
+      if (!file.type.startsWith("image/")) {
+        setDorsalQualityError("Please choose an image file for the dorsal hand.");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setDorsalQualityError("This image is too large. Choose an image under 10 MB.");
+        return;
+      }
+      const image = new Image();
+      const imageQuality = await new Promise<string | null>((resolve) => {
+        image.onload = () => {
+          URL.revokeObjectURL(image.src);
+          if (image.width < 224 || image.height < 224) {
+            resolve("Use a sharper image with at least 224 × 224 pixels.");
+          } else {
+            const canvas = document.createElement("canvas");
+            canvas.width = 64;
+            canvas.height = 64;
+            const context = canvas.getContext("2d", { willReadFrequently: true });
+            if (!context) {
+              resolve(null);
+              return;
+            }
+            context.drawImage(image, 0, 0, 64, 64);
+            const pixels = context.getImageData(0, 0, 64, 64).data;
+            const luminance = [];
+            let likelyHandPixels = 0;
+            let centerHandPixels = 0;
+            for (let index = 0; index < pixels.length; index += 4) {
+              const red = pixels[index];
+              const green = pixels[index + 1];
+              const blue = pixels[index + 2];
+              luminance.push(0.2126 * red + 0.7152 * green + 0.0722 * blue);
+              const likelySkin = red > blue * 1.12 && red > green * 0.9 && green > blue * 0.85 && red - blue > 15;
+              if (likelySkin) {
+                likelyHandPixels += 1;
+                const pixelX = (index / 4) % 64;
+                const pixelY = Math.floor(index / 4 / 64);
+                if (pixelX > 8 && pixelX < 56 && pixelY > 8 && pixelY < 56) centerHandPixels += 1;
+              }
+            }
+            const mean = luminance.reduce((sum, value) => sum + value, 0) / luminance.length;
+            const variance = luminance.reduce((sum, value) => sum + (value - mean) ** 2, 0) / luminance.length;
+            if (mean < 18 || mean > 242) {
+              resolve("This image is too dark or overexposed. Use an evenly lit hand photo.");
+            } else if (variance < 120) {
+              resolve("This image has too little contrast. Use a clearer hand photo with visible detail.");
+            } else if (likelyHandPixels < 220 || centerHandPixels < 150) {
+              resolve("No clear hand was found in the frame. Place the back of your hand in the center and try again.");
+            } else {
+              resolve(null);
+            }
+          }
+        };
+        image.onerror = () => resolve("This image could not be read. Choose a valid JPG, PNG, or WEBP image.");
+        image.src = URL.createObjectURL(file);
+      });
+      if (imageQuality) {
+        setDorsalQualityError(imageQuality);
+        return;
+      }
+      setDorsalQualityError(null);
+    }
     setFiles((current) => ({ ...current, [step]: file }));
+    if (step === "dorsal_hand") {
+      if (dorsalPreviewUrlRef.current) {
+        URL.revokeObjectURL(dorsalPreviewUrlRef.current);
+      }
+      const nextPreviewUrl = file ? URL.createObjectURL(file) : null;
+      dorsalPreviewUrlRef.current = nextPreviewUrl;
+      setDorsalPreviewUrl(nextPreviewUrl);
+    }
   };
+
+  useEffect(() => () => {
+    if (dorsalPreviewUrlRef.current) {
+      URL.revokeObjectURL(dorsalPreviewUrlRef.current);
+    }
+  }, []);
 
   const handleBack = () => {
     setSubmitted(false);
@@ -94,6 +176,9 @@ function AssessmentUploadInner() {
 
       // If dorsal_hand file exists, we can show preview by calling real model while also sending real bytes via fusion
       const dorsalFile = files["dorsal_hand"];
+      if (!dorsalFile) {
+        sessionStorage.removeItem("mage:dorsal-explanation");
+      }
       let previewPromise: Promise<void> | null = null;
       if (modalities.includes("dorsal_hand") && dorsalFile) {
         setDorsalLoading(true);
@@ -101,7 +186,7 @@ function AssessmentUploadInner() {
           try {
             const { predictDorsalHand } = await import("@/lib/api");
             const real = await predictDorsalHand(dorsalFile);
-            setDorsalResult(real);
+            sessionStorage.setItem("mage:dorsal-explanation", JSON.stringify(real));
           } catch (e) {
             console.warn("dorsal preview failed, will rely on fusion real inference", e);
             // don't block submission; fusion will also try real
@@ -285,9 +370,17 @@ function AssessmentUploadInner() {
                       color: files[activeStep] ? "#ffffff" : "#5a5772",
                     }}
                   >
-                    <span className="pointer-events-none">
-                      {files[activeStep] ? files[activeStep].name : "Click to select a file or drop it here"}
-                    </span>
+                    {activeStep === "dorsal_hand" && dorsalPreviewUrl ? (
+                      <img
+                        src={dorsalPreviewUrl}
+                        alt="Selected dorsal hand"
+                        className="h-full w-full object-contain"
+                      />
+                    ) : (
+                      <span className="pointer-events-none">
+                        {files[activeStep] ? files[activeStep].name : "Click to select a file or drop it here"}
+                      </span>
+                    )}
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -309,6 +402,9 @@ function AssessmentUploadInner() {
                     >
                       Remove selected file
                     </button>
+                  )}
+                  {activeStep === "dorsal_hand" && dorsalQualityError && (
+                    <p className="text-sm" style={{ color: "#ff8a8a" }}>{dorsalQualityError}</p>
                   )}
                 </div>
               </div>
@@ -344,12 +440,43 @@ function AssessmentUploadInner() {
                 </div>
                 <div className="rounded-lg border p-4" style={{ borderColor: "#3f3a52", background: "#0e0c1f" }}>
                   <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#bcbac9" }}>Age bins</p>
-                  <p style={{ color: "#bcbac9", fontSize: "12px", marginTop: "4px", lineHeight: 1.6 }}>
-                    {Object.entries(dorsalResult.age_bins).map(([k, v]) => `${k}: ${(Number(v) * 100).toFixed(0)}%`).join(" · ")}
-                  </p>
+                  <div className="mt-3 space-y-2">
+                    {Object.entries(dorsalResult.age_bins).map(([label, value]) => (
+                      <div key={label}>
+                        <div className="flex justify-between text-xs" style={{ color: "#bcbac9" }}>
+                          <span>{label}</span>
+                          <span>{(Number(value) * 100).toFixed(0)}%</span>
+                        </div>
+                        <div className="mt-1 h-1.5 overflow-hidden rounded-full" style={{ background: "#3f3a52" }}>
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, Number(value) * 100))}%`, background: "#c9b4fa" }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <p style={{ color: "#5a5772", fontSize: "11px", marginTop: "8px" }}>Backend: POST /api/predict/dorsal-hand → {dorsalResult.source}. Mock fusion still runs via POST /api/assessment for demo.</p>
+              {dorsalResult.gradcam_data_url && dorsalResult.original_image_data_url && (
+                <div className="mt-6">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {[
+                      ["Input", dorsalResult.original_image_data_url, "Selected dorsal hand"],
+                      ["Model focus", dorsalResult.gradcam_data_url, "Grad-CAM focus overlay for the selected dorsal hand"],
+                    ].map(([label, src, alt]) => (
+                      <div key={label}>
+                        <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#bcbac9" }}>{label}</p>
+                        <img src={src} alt={alt} className="mt-3 aspect-square h-auto w-full rounded-lg border object-contain" style={{ borderColor: "#3f3a52", background: "#0e0c1f" }} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 text-xs" style={{ color: "#8f8aa4" }}>
+                    <span>Low focus</span>
+                    <span className="h-2 flex-1 rounded-full" style={{ background: "linear-gradient(90deg, #3136d8, #20cbd2, #f4e34b, #e43b28)" }} />
+                    <span>High focus</span>
+                  </div>
+                </div>
+              )}
+              <DorsalHandExplainability />
+              <p style={{ color: "#5a5772", fontSize: "11px", marginTop: "8px" }}>Backend: POST /api/predict/dorsal-hand → {dorsalResult.source}.</p>
             </div>
           )}
 

@@ -220,6 +220,8 @@ export type DorsalHandPrediction = {
   confidence: number;
   age_bins: Record<string, number>;
   source: string;
+  gradcam_data_url: string | null;
+  original_image_data_url: string | null;
 };
 
 export async function predictDorsalHand(file: File): Promise<DorsalHandPrediction> {
@@ -247,6 +249,37 @@ export async function predictDorsalHand(file: File): Promise<DorsalHandPredictio
     throw err;
   }
   return res.json();
+}
+
+export type DorsalHistory = {
+  tracking_enabled: boolean;
+  baseline_predicted_age: number | null;
+  baseline_at: string | null;
+  latest_predicted_age: number | null;
+  change_from_baseline: number | null;
+  predictions: Array<{
+    id: number;
+    predicted_at: string;
+    predicted_age: number;
+    confidence: number;
+    age_bins: Record<string, number>;
+    is_baseline: boolean;
+  }>;
+};
+
+export function startDorsalTracking(prediction: Pick<DorsalHandPrediction, "predicted_age" | "confidence" | "age_bins">) {
+  return apiFetch("/api/dorsal-tracking/baseline", {
+    method: "POST",
+    body: JSON.stringify({
+      predicted_age: prediction.predicted_age,
+      confidence: prediction.confidence,
+      age_bins: prediction.age_bins,
+    }),
+  }) as Promise<{ tracking_enabled: boolean; baseline_predicted_age: number }>;
+}
+
+export function getDorsalHistory() {
+  return apiFetch("/api/dorsal-tracking/history") as Promise<DorsalHistory>;
 }
 
 // Admin

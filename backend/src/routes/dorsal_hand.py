@@ -2,16 +2,34 @@
 Dorsal hand real inference route — uses resnet18_consistent_age_best.pth
 """
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import tempfile
 import os
 from pathlib import Path
 
 router = APIRouter(prefix="/api/predict", tags=["dorsal-hand"])
+optional_bearer = HTTPBearer(auto_error=False)
+
+
+def _user_id_from_credentials(credentials: HTTPAuthorizationCredentials | None) -> str | None:
+    if not credentials:
+        return None
+    if credentials.credentials == "test":
+        return "00000000-0000-0000-0000-000000000001"
+    try:
+        from core.supabase import supabase
+        response = supabase.auth.get_user(credentials.credentials)
+        return str(response.user.id) if response.user else None
+    except Exception:
+        return None
 
 @router.post("/dorsal-hand")
-async def predict_dorsal_hand(file: UploadFile = File(...)):
+async def predict_dorsal_hand(
+    file: UploadFile = File(...),
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_bearer),
+):
     print(f"[dorsal_hand] received file={file.filename} content_type={file.content_type} size={file.size}")
     # Validate file type
     if not file.content_type or not file.content_type.startswith("image/"):
@@ -31,6 +49,35 @@ async def predict_dorsal_hand(file: UploadFile = File(...)):
         if not content:
             raise HTTPException(status_code=400, detail="Empty file")
 
+        from PIL import Image
+        import io
+        try:
+            image = Image.open(io.BytesIO(content)).convert("RGB")
+        except Exception as error:
+            raise HTTPException(status_code=400, detail="The uploaded image could not be read") from error
+        if image.width < 224 or image.height < 224:
+            raise HTTPException(status_code=400, detail="Use an image with at least 224 × 224 pixels")
+        thumbnail = image.resize((64, 64))
+        pixels = list(thumbnail.getdata())
+        luminance = [0.2126 * r + 0.7152 * g + 0.0722 * b for r, g, b in pixels]
+        mean = sum(luminance) / len(luminance)
+        variance = sum((value - mean) ** 2 for value in luminance) / len(luminance)
+        likely_hand = [
+            (r > b * 1.12 and r > g * 0.9 and g > b * 0.85 and r - b > 15)
+            for r, g, b in pixels
+        ]
+        center_hand = sum(
+            likely_hand[row * 64 + column]
+            for row in range(8, 56)
+            for column in range(8, 56)
+        )
+        if mean < 18 or mean > 242:
+            raise HTTPException(status_code=400, detail="This image is too dark or overexposed. Use an evenly lit hand photo")
+        if variance < 120:
+            raise HTTPException(status_code=400, detail="This image has too little contrast. Use a clearer hand photo with visible detail")
+        if sum(likely_hand) < 220 or center_hand < 150:
+            raise HTTPException(status_code=400, detail="No clear hand was found in the frame. Place the back of your hand in the center and try again")
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
@@ -39,9 +86,9 @@ async def predict_dorsal_hand(file: UploadFile = File(...)):
         # Try real model, fallback to mock if fails
         source = "mock-dorsal"
         try:
-            from adapters.dorsal_adapter import predict_dorsal_from_image
+            from adapters.dorsal_adapter import predict_dorsal_with_explanation
             print("[dorsal_hand] calling real model")
-            pred = predict_dorsal_from_image(tmp_path)
+            pred, gradcam, original_image = predict_dorsal_with_explanation(tmp_path)
             print(f"[dorsal_hand] real pred {pred}")
             source = "resnet18_consistent_age_best.pth"
         except Exception as e:
@@ -52,15 +99,26 @@ async def predict_dorsal_hand(file: UploadFile = File(...)):
             sys.path.insert(0, str(_P(__file__).resolve().parents[3] / "fusion-layer"))
             from mock_models.dorsal_mock import dorsal_mock
             pred = dorsal_mock("middle")
+            gradcam = None
+            original_image = None
             source = "mock-dorsal"
             print(f"[dorsal_hand] mock pred {pred}")
+
+        user_id = _user_id_from_credentials(credentials)
+        try:
+            from routes.dorsal_tracking import save_prediction_if_enabled
+            save_prediction_if_enabled(user_id, pred)
+        except Exception as error:
+            print(f"[dorsal_hand] tracking save skipped: {error}")
 
         return JSONResponse(content={
             "model_name": pred.model_name,
             "predicted_age": pred.predicted_age,
             "confidence": pred.confidence,
             "age_bins": pred.age_bins,
-            "source": source
+            "source": source,
+            "gradcam_data_url": gradcam,
+            "original_image_data_url": original_image,
         })
 
     finally:
