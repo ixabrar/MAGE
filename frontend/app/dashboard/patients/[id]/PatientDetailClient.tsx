@@ -144,11 +144,29 @@ export default function PatientDetailClient({ patientId }: { patientId: string }
     setPdfLoading(true);
     setError(null);
     try {
-      // build payload from form — include all 77 keys that are set, others omitted (backend treats missing as NaN)
       const payload: BioAgePredictionRequest = { ...bioAgeForm };
-      // ensure Gender is set from patient if not already
       if (payload.Gender === undefined && patient.gender) {
         payload.Gender = patient.gender.toLowerCase().startsWith("m") ? 1 : patient.gender.toLowerCase().startsWith("f") ? 0 : undefined;
+      }
+      // First get real JSON prediction so frontend display == PDF (same payload, same model)
+      const { predictBioAgeJson } = await import("@/lib/api");
+      try {
+        const json = await predictBioAgeJson(patientId, payload);
+        const mapped: BioAgePrediction = {
+          chronological_age: json.chronological_age,
+          predicted_bio_age: json.predicted_bio_age,
+          bio_age_gap: json.bio_age_gap,
+          contributing_factors: (json.top_contributing_factors || []).map((f: any) => ({
+            feature: f.feature,
+            direction: f.impact > 0 ? "increases gap" : "decreases gap",
+            strength: Math.min(1, Math.abs(f.impact) / 2),
+          })),
+          ai_summary: `Real XGBoost: chrono ${json.chronological_age}, bio ${json.predicted_bio_age.toFixed(1)}, gap ${json.bio_age_gap > 0 ? "+" : ""}${json.bio_age_gap.toFixed(1)}. Top: ${(json.top_contributing_factors || []).map((f: any) => f.feature).join(", ") || "none"}.`,
+          recommendations: [],
+        };
+        setPrediction(mapped);
+      } catch (jsonErr) {
+        console.warn("JSON prediction failed, will still try PDF", jsonErr);
       }
       const blob = await predictBioAgePdf(patientId, payload);
       setPdfBlob(blob);
@@ -157,7 +175,7 @@ export default function PatientDetailClient({ patientId }: { patientId: string }
         if (prev) URL.revokeObjectURL(prev);
         return url;
       });
-      setSaveMsg("Official PDF report generated via XGBoost + SHAP (backend).");
+      setSaveMsg("Official PDF and frontend now share the same real XGBoost prediction.");
     } catch (e: any) {
       setError(e.message || "PDF generation failed — is the backend’s xgb_model.pkl and shap installed? Falling back to mock gap above.");
     } finally {

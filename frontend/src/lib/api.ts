@@ -237,6 +237,23 @@ export async function predictBioAgePdf(patientId: string, payload: BioAgePredict
   return await res.blob();
 }
 
+// JSON version — same prediction as PDF, but returns JSON so frontend and PDF can share one prediction
+export type BioAgeJsonResult = {
+  chronological_age: number;
+  predicted_bio_age: number;
+  bio_age_gap: number;
+  top_contributing_factors: { feature: string; impact: number; value: number }[];
+  recommendations?: string;
+};
+
+export async function predictBioAgeJson(patientId: string, payload: BioAgePredictionRequest): Promise<BioAgeJsonResult> {
+  return apiFetch(`/api/patients/${patientId}/predict-bio-age/json`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    auth: true,
+  });
+}
+
 export async function emailReport(patientId: string): Promise<{ status: string; message: string }> {
   return apiFetch(`/api/patients/${patientId}/email-report`, { method: "POST", auth: true });
 }

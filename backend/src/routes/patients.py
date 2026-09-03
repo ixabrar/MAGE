@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from typing import List
 from uuid import UUID
 from datetime import datetime, date
@@ -186,6 +186,37 @@ async def predict_bio_age(
             "Content-Disposition": f"attachment; filename=bio_age_report_{patient_id}.pdf"
         }
     )
+
+@router.post("/{patient_id}/predict-bio-age/json")
+async def predict_bio_age_json(
+    patient_id: UUID,
+    payload: BioAgePredictionRequest,
+    doctor_id: str = Depends(get_current_doctor_id)
+):
+    # Same as predict-bio-age but returns JSON so frontend display == PDF
+    verify = supabase.table("patients").select("*").eq("id", str(patient_id)).eq("doctor_id", doctor_id).execute()
+    if not verify.data:
+        raise HTTPException(status_code=404, detail="Patient not found or unauthorized")
+    patient_data = verify.data[0]
+    dob_str = patient_data.get("date_of_birth")
+    if not dob_str:
+        raise HTTPException(status_code=400, detail="Patient date of birth is missing")
+    dob = date.fromisoformat(dob_str[:10])
+    today = date.today()
+    chronological_age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    try:
+        features_dict = payload.model_dump()
+        analysis_results = predict_bio_age_and_explain(features_dict, float(chronological_age))
+        if analysis_results.get("bio_age_gap", 0) > 0:
+            factors = analysis_results.get("top_contributing_factors", [])
+            recommendations_html = generate_health_recommendations(factors)
+            analysis_results["recommendations"] = recommendations_html
+        else:
+            analysis_results["recommendations"] = ""
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+    return JSONResponse(content=analysis_results)
+
 
 @router.post("/{patient_id}/email-report")
 async def email_patient_report(
