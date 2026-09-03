@@ -85,12 +85,22 @@ function AssessmentUploadInner() {
   const [dorsalQualityError, setDorsalQualityError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Clear any stale assessment caches on mount to ensure complete isolation
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem("mage:dorsal-explanation");
+    } catch {}
+  }, []);
+
   const handleChange = async (step: StepKey, file: File | null, customPreviewUrl?: string) => {
     setFiles((current) => ({ ...current, [step]: file }));
     setSubmitError(null);
     if (step === "dorsal_hand") {
       setDorsalResult(null);
       setDorsalQualityError(null);
+      try {
+        sessionStorage.removeItem("mage:dorsal-explanation");
+      } catch {}
     }
 
     if (file) {
