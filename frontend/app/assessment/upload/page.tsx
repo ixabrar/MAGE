@@ -122,16 +122,16 @@ function AssessmentUploadInner() {
               }));
             }
           } else {
-            // Validator unavailable, don't block
+            const errData = await res.json().catch(() => ({}));
             setValidations((prev) => ({
               ...prev,
-              [step]: { status: "valid", message: "Image ready for inference." },
+              [step]: { status: "invalid", message: errData.message || "Image validation rejected. Please choose a clear photo." },
             }));
           }
         } catch {
           setValidations((prev) => ({
             ...prev,
-            [step]: { status: "valid", message: "Image ready for inference." },
+            [step]: { status: "invalid", message: "Could not connect to validation service. Please check your backend connection." },
           }));
         }
       } else {
