@@ -3,6 +3,7 @@
 import { Suspense, useMemo, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
+import BiometricCameraCapture from "@/components/camera/BiometricCameraCapture";
 
 const steps = [
   { key: "face", label: "Face", hint: "Camera / Upload" },
@@ -14,19 +15,19 @@ type StepKey = (typeof steps)[number]["key"];
 
 const modalityMeta: Record<StepKey, { title: string; accept: string; helper: string }> = {
   face: {
-    title: "Face input",
+    title: "Face Input — EfficientNet-B0 MoE",
     accept: "image/*",
-    helper: "Upload a clear frontal face image or use the camera placeholder.",
+    helper: "Capture a live frontal face photo with the guided biometric frame or upload an image.",
   },
   dorsal_hand: {
-    title: "Dorsal hand input — ResNet18",
+    title: "Dorsal Hand Input — ResNet18",
     accept: "image/*",
-    helper: "Upload a dorsal-hand image (ResNet18 resnet18_consistent_age_best.pth, 128M) — real inference on CPU, fallback to mock if unavailable.",
+    helper: "Capture the back of your hand palm-down or upload a dorsal hand image.",
   },
   blood: {
-    title: "Blood input",
+    title: "Blood Chemistry Report",
     accept: ".pdf,image/*",
-    helper: "Upload a PDF report or image of blood-derived values.",
+    helper: "Upload a PDF report or clear image of clinical blood biomarker metrics.",
   },
 };
 
@@ -41,14 +42,24 @@ function AssessmentUploadInner() {
       .filter((value): value is StepKey => steps.some((step) => step.key === value));
   }, [selectedParam]);
   const availableSteps = useMemo(() => steps.filter((step) => selected.includes(step.key)), [selected]);
-  // Keep initial deterministic to avoid hydration mismatch (server/client both start at "face")
-  // useEffect below will sync to correct tab from URL (?selected=...)
+
   const [activeStep, setActiveStep] = useState<StepKey>("face");
   const [files, setFiles] = useState<Record<StepKey, File | null>>({
     face: null,
     dorsal_hand: null,
     blood: null,
   });
+  const [filePreviews, setFilePreviews] = useState<Record<StepKey, string | null>>({
+    face: null,
+    dorsal_hand: null,
+    blood: null,
+  });
+  const [inputModes, setInputModes] = useState<Record<StepKey, "file" | "camera">>({
+    face: "file",
+    dorsal_hand: "file",
+    blood: "file",
+  });
+
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -57,8 +68,20 @@ function AssessmentUploadInner() {
   const [dorsalLoading, setDorsalLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleChange = (step: StepKey, file: File | null) => {
+  const handleChange = (step: StepKey, file: File | null, customPreviewUrl?: string) => {
     setFiles((current) => ({ ...current, [step]: file }));
+    if (file) {
+      if (customPreviewUrl) {
+        setFilePreviews((prev) => ({ ...prev, [step]: customPreviewUrl }));
+      } else if (file.type.startsWith("image/")) {
+        const url = URL.createObjectURL(file);
+        setFilePreviews((prev) => ({ ...prev, [step]: url }));
+      } else {
+        setFilePreviews((prev) => ({ ...prev, [step]: null }));
+      }
+    } else {
+      setFilePreviews((prev) => ({ ...prev, [step]: null }));
+    }
   };
 
   const handleBack = () => {
@@ -78,7 +101,6 @@ function AssessmentUploadInner() {
     }
   }, [availableSteps, activeStep]);
 
-  // reset file input value when switching tabs so same file can be re-selected
   useEffect(() => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [activeStep]);
@@ -92,7 +114,6 @@ function AssessmentUploadInner() {
       const modalities = availableSteps.map((step) => step.key);
       const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-      // If dorsal_hand file exists, we can show preview by calling real model while also sending real bytes via fusion
       const dorsalFile = files["dorsal_hand"];
       let previewPromise: Promise<void> | null = null;
       if (modalities.includes("dorsal_hand") && dorsalFile) {
@@ -104,25 +125,22 @@ function AssessmentUploadInner() {
             setDorsalResult(real);
           } catch (e) {
             console.warn("dorsal preview failed, will rely on fusion real inference", e);
-            // don't block submission; fusion will also try real
           } finally {
             setDorsalLoading(false);
           }
         })();
       }
 
-      // Build multipart FormData with real file bytes so backend dorsal_adapter gets file_path
+      // Build multipart FormData with real file bytes
       const formData = new FormData();
       formData.append("modalities", JSON.stringify(modalities));
       for (const step of availableSteps) {
         const file = files[step.key];
         if (file) {
-          // key must match modality name exactly (backend looks for form.get(modality))
           formData.append(step.key, file, file.name);
         }
       }
 
-      // Wait for preview to settle a bit but don't block forever (max 3s)
       if (previewPromise) {
         await Promise.race([previewPromise, new Promise((r) => setTimeout(r, 3000))]);
       }
@@ -130,7 +148,6 @@ function AssessmentUploadInner() {
       const response = await fetch(`${apiBase}/api/assessment`, {
         method: "POST",
         body: formData,
-        // no content-type header — browser sets multipart boundary
       });
 
       if (!response.ok) {
@@ -141,11 +158,10 @@ function AssessmentUploadInner() {
       const data = await response.json();
       setSubmittedAssessmentId(data.assessment_id);
       setSubmitted(true);
-      // Show preview a bit if dorsal was used
+
       if (dorsalFile && dorsalResult) {
-        setTimeout(() => router.push(`/assessment/processing?assessment_id=${data.assessment_id}`), 1500);
+        setTimeout(() => router.push(`/assessment/processing?assessment_id=${data.assessment_id}`), 1200);
       } else if (dorsalFile) {
-        // wait a moment for fusion to be ready
         setTimeout(() => router.push(`/assessment/processing?assessment_id=${data.assessment_id}`), 500);
       } else {
         router.push(`/assessment/processing?assessment_id=${data.assessment_id}`);
@@ -156,236 +172,255 @@ function AssessmentUploadInner() {
     }
   };
 
+  const hasAtLeastOneFile = Object.values(files).some((f) => f !== null);
+
   return (
     <div className="relative min-h-screen bg-black text-white" suppressHydrationWarning>
       <div className="mx-auto max-w-7xl px-6 py-16 sm:px-10 lg:px-16">
+        {/* Top Navigation */}
         <nav className="flex items-center justify-between">
           <a
             href="/"
-            className="inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-semibold uppercase transition-colors duration-150 hover:border-white hover:bg-white/6"
-            style={{
-              fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-              fontSize: "12px",
-              fontWeight: 600,
-              lineHeight: 1,
-              letterSpacing: "1.8px",
-              color: "#bcbac9",
-            }}
+            className="inline-flex items-center rounded-md border border-white/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[1.8px] text-[#bcbac9] transition-colors duration-150 hover:border-white hover:bg-white/6 hover:text-white"
+            style={{ fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif" }}
           >
             ← MAGE
           </a>
-          <div className="text-sm" style={{ color: "#5a5772" }}>
+          <div className="text-sm font-medium text-[#5a5772]">
             {submitted ? "Submitted" : "Step 2 of 3"}
           </div>
         </nav>
 
         <div className="mt-16 max-w-2xl">
           <h1
-            className="text-4xl font-medium tracking-tight"
+            className="text-4xl font-medium tracking-tight text-white sm:text-5xl"
             style={{
               fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-              fontSize: "48px",
-              fontWeight: 460,
-              lineHeight: 0.96,
               letterSpacing: "-1.32px",
-              color: "#ffffff",
             }}
           >
-            Upload inputs
+            Upload or Capture Inputs
           </h1>
-          <p className="mt-6 text-lg" style={{
-            fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-            fontSize: "18px",
-            fontWeight: 540,
-            lineHeight: 1.5,
-            letterSpacing: "-0.135px",
-            color: "#bcbac9",
-          }}>
-            Provide each selected input. Only the modalities chosen in the previous step are available here.
+          <p
+            className="mt-6 text-lg text-[#bcbac9]"
+            style={{
+              fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
+              lineHeight: 1.5,
+            }}
+          >
+            Provide biometric inputs using live camera capture or file upload. Inputs are preprocessed and aligned before deep neural inference.
           </p>
 
-            {availableSteps.length === 0 ? (
-            <p className="mt-8 text-sm" style={{ color: "#ff8a8a" }}>
+          {availableSteps.length === 0 ? (
+            <p className="mt-8 text-sm text-red-400">
               No modalities selected. Go back and choose at least one signal before uploading.
             </p>
           ) : (
-            <div className="mt-10 flex gap-2" suppressHydrationWarning>
-              {availableSteps.map((step) => (
-                <button
-                  key={step.key}
-                  type="button"
-                  onClick={() => setActiveStep(step.key)}
-                  className="rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors duration-150"
-                  style={{
-                    fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    lineHeight: 1.0,
-                    letterSpacing: "0px",
-                    borderColor: activeStep === step.key ? "#c9b4fa" : "transparent",
-                    color: activeStep === step.key ? "#1b1938" : "#bcbac9",
-                    background: activeStep === step.key ? "#c9b4fa" : "transparent",
-                  }}
-                >
-                  {step.label}
-                </button>
-              ))}
+            /* Modality Tabs */
+            <div className="mt-10 flex flex-wrap gap-2" suppressHydrationWarning>
+              {availableSteps.map((step) => {
+                const hasFile = !!files[step.key];
+                const isCurrent = activeStep === step.key;
+                return (
+                  <button
+                    key={step.key}
+                    type="button"
+                    onClick={() => setActiveStep(step.key)}
+                    className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-all duration-150 ${
+                      isCurrent
+                        ? "border-[#c9b4fa] bg-[#c9b4fa] text-[#1b1938]"
+                        : "border-[#3f3a52] bg-transparent text-[#bcbac9] hover:border-white/40 hover:text-white"
+                    }`}
+                  >
+                    <span>{step.label}</span>
+                    {hasFile && (
+                      <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${
+                        isCurrent ? "bg-[#1b1938] text-[#c9b4fa]" : "bg-[#c9b4fa] text-[#1b1938]"
+                      }`}>
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
 
+          {/* Active Modality Container */}
           <div
-            className="mt-8 rounded-xl border p-8"
-            style={{
-              background: "#000000",
-              borderColor: "#3f3a52",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-            }}
+            className="mt-8 rounded-xl border border-[#3f3a52] bg-[#000000] p-6 sm:p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
           >
             {availableSteps.length === 0 ? (
-              <p style={{ color: "#bcbac9" }}>No modality selected.</p>
+              <p className="text-[#bcbac9]">No modality selected.</p>
             ) : (
-              <div key={activeStep} className="space-y-4" suppressHydrationWarning>
-                <div>
-                  <h3
-                    suppressHydrationWarning
-                    className="text-xl font-medium"
-                    style={{
-                      fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                      fontSize: "22px",
-                      fontWeight: 460,
-                      lineHeight: 1.1,
-                      letterSpacing: "-0.315px",
-                      color: "#ffffff",
-                    }}
-                  >
-                    {modalityMeta[activeStep].title}
-                  </h3>
-                  <p className="mt-2 text-sm" style={{ color: "#5a5772" }}>
-                    {modalityMeta[activeStep].helper}
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => fileInputRef.current?.click()}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); } }}
-                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const file = e.dataTransfer.files?.[0] ?? null;
-                      if (file) handleChange(activeStep, file);
-                    }}
-                    className="flex h-48 cursor-pointer items-center justify-center rounded-lg border relative overflow-hidden"
-                    style={{
-                      borderColor: "#3f3a52",
-                      background: "#0e0c1f",
-                      color: files[activeStep] ? "#ffffff" : "#5a5772",
-                    }}
-                  >
-                    <span className="pointer-events-none">
-                      {files[activeStep] ? files[activeStep].name : "Click to select a file or drop it here"}
-                    </span>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      className="hidden"
-                      accept={modalityMeta[activeStep].accept}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0] ?? null;
-                        handleChange(activeStep, file);
-                      }}
-                    />
+              <div key={activeStep} className="space-y-6" suppressHydrationWarning>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-medium text-white">
+                      {modalityMeta[activeStep].title}
+                    </h3>
+                    <p className="mt-1 text-xs text-[#bcbac9]/80">
+                      {modalityMeta[activeStep].helper}
+                    </p>
                   </div>
 
-                  {files[activeStep] && (
-                    <button
-                      type="button"
-                      onClick={() => handleChange(activeStep, null)}
-                      className="text-left text-sm underline"
-                      style={{ color: "#bcbac9" }}
-                    >
-                      Remove selected file
-                    </button>
+                  {/* Camera / Upload Switch for Image Modalities */}
+                  {(activeStep === "face" || activeStep === "dorsal_hand") && !files[activeStep] && (
+                    <div className="inline-flex rounded-lg border border-[#3f3a52] bg-[#0e0c1f] p-1 text-xs font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setInputModes((prev) => ({ ...prev, [activeStep]: "file" }))}
+                        className={`rounded-md px-3 py-1.5 transition-colors ${
+                          inputModes[activeStep] === "file"
+                            ? "bg-[#c9b4fa] text-[#1b1938]"
+                            : "text-[#bcbac9] hover:text-white"
+                        }`}
+                      >
+                        📁 File Upload
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInputModes((prev) => ({ ...prev, [activeStep]: "camera" }))}
+                        className={`rounded-md px-3 py-1.5 transition-colors ${
+                          inputModes[activeStep] === "camera"
+                            ? "bg-[#c9b4fa] text-[#1b1938]"
+                            : "text-[#bcbac9] hover:text-white"
+                        }`}
+                      >
+                        📷 Live Camera
+                      </button>
+                    </div>
                   )}
                 </div>
+
+                {/* Body Content: Camera Capture or File Dropzone / Selected Preview */}
+                {files[activeStep] ? (
+                  /* Confirmed Selection Preview Card */
+                  <div className="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-[#c9b4fa]/40 bg-[#0e0c1f] p-5">
+                    {filePreviews[activeStep] ? (
+                      <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-[#c9b4fa]/50">
+                        <img
+                          src={filePreviews[activeStep]!}
+                          alt="Input preview"
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-black text-2xl">
+                        📄
+                      </div>
+                    )}
+                    <div className="flex-1 text-center sm:text-left">
+                      <p className="text-sm font-semibold text-white truncate max-w-xs">
+                        {files[activeStep]!.name}
+                      </p>
+                      <p className="mt-1 text-xs text-[#bcbac9]">
+                        {(files[activeStep]!.size / 1024).toFixed(1)} KB · Ready for inference
+                      </p>
+                      <div className="mt-3 flex gap-3 justify-center sm:justify-start">
+                        <button
+                          type="button"
+                          onClick={() => handleChange(activeStep, null)}
+                          className="text-xs font-semibold text-red-400 hover:text-red-300 underline"
+                        >
+                          Remove / Retake
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : inputModes[activeStep] === "camera" && (activeStep === "face" || activeStep === "dorsal_hand") ? (
+                  /* Live Biometric Camera with Auto-Cropping ROI */
+                  <BiometricCameraCapture
+                    modality={activeStep}
+                    onCapture={(file, previewUrl) => {
+                      handleChange(activeStep, file, previewUrl);
+                    }}
+                    onCancel={() => setInputModes((prev) => ({ ...prev, [activeStep]: "file" }))}
+                  />
+                ) : (
+                  /* Standard Drag & Drop File Zone */
+                  <div className="flex flex-col gap-3">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => fileInputRef.current?.click()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          fileInputRef.current?.click();
+                        }
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const file = e.dataTransfer.files?.[0] ?? null;
+                        if (file) handleChange(activeStep, file);
+                      }}
+                      className="flex h-48 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#3f3a52] bg-[#0e0c1f] p-6 transition-colors hover:border-[#c9b4fa]/60 hover:bg-[#141228]"
+                    >
+                      <div className="mb-2 text-2xl text-[#c9b4fa]">
+                        {activeStep === "blood" ? "📄" : "📷"}
+                      </div>
+                      <span className="text-sm font-medium text-white">
+                        Click to select {activeStep.replace("_", " ")} file or drag &amp; drop here
+                      </span>
+                      <span className="mt-1 text-xs text-[#5a5772]">
+                        {modalityMeta[activeStep].accept.replace(/,/g, ", ")} · Max 15MB
+                      </span>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        accept={modalityMeta[activeStep].accept}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null;
+                          handleChange(activeStep, file);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
           {submitError && (
-            <p className="mt-4 text-sm" style={{ color: "#ff8a8a" }}>
+            <p className="mt-4 text-sm text-red-400">
               {submitError}
             </p>
           )}
 
           {dorsalLoading && (
-            <div className="mt-4 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: "#c9b4fa", background: "rgba(201,180,250,0.08)", color: "#bcbac9" }}>
-              Running dorsal hand ResNet18 (resnet18_consistent_age_best.pth) on CPU…
+            <div className="mt-4 rounded-lg border border-[#c9b4fa] bg-[rgba(201,180,250,0.08)] px-4 py-3 text-sm text-[#bcbac9]">
+              Running dorsal hand ResNet18 inference on CPU…
             </div>
           )}
 
-          {dorsalResult && (
-            <div className="mt-4 rounded-xl border p-6" style={{ borderColor: "#c9b4fa", background: "#000" }}>
-              <p className="text-xs uppercase" style={{ letterSpacing: "1.8px", color: "#c9b4fa" }}>
-                Dorsal hand — ResNet18 result (real model)
-              </p>
-              <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <div className="rounded-lg border p-4" style={{ borderColor: "#3f3a52", background: "#0e0c1f" }}>
-                  <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#bcbac9" }}>Predicted age</p>
-                  <p style={{ color: "#fff", fontSize: "24px", fontWeight: 700, marginTop: "4px" }}>{dorsalResult.predicted_age.toFixed(1)}</p>
-                  <p style={{ color: "#5a5772", fontSize: "12px" }}>years · {dorsalResult.source}</p>
-                </div>
-                <div className="rounded-lg border p-4" style={{ borderColor: "#3f3a52", background: "#0e0c1f" }}>
-                  <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#bcbac9" }}>Confidence</p>
-                  <p style={{ color: "#fff", fontSize: "24px", fontWeight: 700, marginTop: "4px" }}>{(dorsalResult.confidence * 100).toFixed(0)}%</p>
-                </div>
-                <div className="rounded-lg border p-4" style={{ borderColor: "#3f3a52", background: "#0e0c1f" }}>
-                  <p className="text-xs uppercase" style={{ letterSpacing: "1.2px", color: "#bcbac9" }}>Age bins</p>
-                  <p style={{ color: "#bcbac9", fontSize: "12px", marginTop: "4px", lineHeight: 1.6 }}>
-                    {Object.entries(dorsalResult.age_bins).map(([k, v]) => `${k}: ${(Number(v) * 100).toFixed(0)}%`).join(" · ")}
-                  </p>
-                </div>
-              </div>
-              <p style={{ color: "#5a5772", fontSize: "11px", marginTop: "8px" }}>Backend: POST /api/predict/dorsal-hand → {dorsalResult.source}. Mock fusion still runs via POST /api/assessment for demo.</p>
-            </div>
-          )}
-
-          <div className="mt-10 flex items-center justify-between">
+          {/* Action Buttons Bar */}
+          <div className="mt-8 flex items-center justify-between">
             <button
               type="button"
               onClick={handleBack}
-              className="rounded-full border px-6 py-3 text-base font-semibold transition-colors duration-150"
-              style={{
-                fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                fontSize: "16px",
-                fontWeight: 700,
-                lineHeight: 1.0,
-                letterSpacing: "0px",
-                borderColor: "#3f3a52",
-                color: "#ffffff",
-              }}
+              className="rounded-full border border-[#3f3a52] px-6 py-2.5 text-sm font-semibold text-[#bcbac9] transition-colors hover:border-white hover:text-white"
             >
-              Back
+              ← Back
             </button>
+
             <button
               type="button"
-              disabled={submitting || dorsalLoading || !availableSteps.every((step) => Boolean(files[step.key]))}
               onClick={handleSubmit}
-              className="rounded-full px-6 py-3 text-base font-semibold transition-colors duration-150 disabled:opacity-40"
-              style={{
-                fontFamily: "var(--font-inter, 'Inter'), system-ui, sans-serif",
-                fontSize: "16px",
-                fontWeight: 700,
-                lineHeight: 1.0,
-                letterSpacing: "0px",
-                background: "#c9b4fa",
-                color: "#1b1938",
-              }}
+              disabled={submitting || !hasAtLeastOneFile}
+              className={`rounded-full px-8 py-3 text-sm font-bold transition-all duration-150 ${
+                submitting || !hasAtLeastOneFile
+                  ? "cursor-not-allowed border border-[#3f3a52] bg-transparent text-[#5a5772]"
+                  : "bg-[#c9b4fa] text-[#1b1938] hover:scale-105 shadow-[0_0_20px_rgba(201,180,250,0.3)]"
+              }`}
             >
-              {submitting ? "Submitting…" : "Continue"}
+              {submitting ? "Processing Assessment…" : "Continue to Fusion →"}
             </button>
           </div>
         </div>
@@ -396,7 +431,13 @@ function AssessmentUploadInner() {
 
 export default function AssessmentUploadPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-sm text-[#bcbac9]">Loading upload step…</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black flex items-center justify-center text-sm text-[#bcbac9]">
+          Loading upload step…
+        </div>
+      }
+    >
       <AssessmentUploadInner />
     </Suspense>
   );

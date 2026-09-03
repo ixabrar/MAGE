@@ -195,11 +195,13 @@ def _preprocess_image(image_path_or_bytes):
     from PIL import Image
     import torchvision.transforms as T
 
-    if isinstance(image_path_or_bytes, (bytes, bytearray)):
+    if isinstance(image_path_or_bytes, Image.Image):
+        img = image_path_or_bytes.convert("RGB")
+    elif isinstance(image_path_or_bytes, (bytes, bytearray)):
         import io
         img = Image.open(io.BytesIO(image_path_or_bytes)).convert("RGB")
-    elif isinstance(image_path_or_bytes, str):
-        img = Image.open(image_path_or_bytes).convert("RGB")
+    elif isinstance(image_path_or_bytes, (str, Path)):
+        img = Image.open(str(image_path_or_bytes)).convert("RGB")
     else:
         # Assume file-like
         try:
